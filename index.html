@@ -417,8 +417,7 @@ function buildDoc(route, init){
   const boot='<script>window.__BOOT__='+bootJson.replace(/<\//g,'<\\/')+';<\/script>';
   const app='<script>'+APP_SRC.replace(/<\/script/gi,'<\\/script')+'<\/script>';
   const title=(TITLES[route]||'分析システム')+' ｜ おかやま創研';
-  return '<!doctype html><html lang="ja"><head><meta charset="utf-8">
-<meta name="robots" content="noindex,nofollow">'+
+  return '<!doctype html><html lang="ja"><head><meta charset="utf-8">'+
     '<meta name="viewport" content="width=device-width,initial-scale=1">'+
     '<title>'+title+'</title>'+styles+'</head><body><div id="app"></div>'+dataHtml+boot+app+'</body></html>';
 }
