@@ -191,7 +191,7 @@ a{color:var(--accent-color);text-decoration:none}a:hover{text-decoration:underli
 .trend-now{font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--dark-gray)}
 .trend-delta{font-size:.75rem;font-weight:700;border-radius:3px;padding:1px 5px}
 .delta-up{color:#1d7a3c;background:#e6f5ea}.delta-down{color:#a8332f;background:#fbeceb}.delta-flat{color:#5b6b7c;background:#eef1f5}
-.trend-svg{width:100%;height:96px;display:block;cursor:pointer}
+.trend-svg{width:100%;height:auto;aspect-ratio:300/96;display:block;cursor:pointer}
 .trend-foot{font-size:.7rem;color:var(--medium-gray);margin-top:.25rem}
 .cmp-bar{position:relative;height:1.35rem;background:#eef1f5;border-radius:4px;overflow:hidden}
 .cmp-bar i{display:block;height:100%;background:var(--accent-color);opacity:.85}
@@ -627,7 +627,7 @@ function deltaTag(cur,prev){
 /** series: [{p, v}] / fmt: 値の表示関数 */
 function lineChart(series, opt){
   opt=opt||{};
-  const W=300,H=96,PL=6,PR=6,PT=12,PB=18;
+  const W=300,H=96,PL=20,PR=20,PT=12,PB=18;
   const vals=series.map(s=>s.v).filter(v=>v!=null);
   if(!vals.length) return '<div class="subtitle" style="padding:1.5rem 0;text-align:center">データなし</div>';
   let mn=Math.min(...vals,opt.ref!=null?opt.ref:Infinity), mx=Math.max(...vals,opt.ref!=null?opt.ref:-Infinity);
@@ -643,7 +643,7 @@ function lineChart(series, opt){
   const tgtLine=opt.target!=null?`<line x1="${PL}" x2="${W-PR}" y1="${y(opt.target).toFixed(1)}" y2="${y(opt.target).toFixed(1)}" stroke="var(--danger-color)" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>`:'';
   const dots=series.map((s,i)=>s.v==null?'':`<g><circle cx="${x(i).toFixed(1)}" cy="${y(s.v).toFixed(1)}" r="${s.p===PERIOD?4:3}" fill="${s.p===PERIOD?'var(--accent-color)':'#fff'}" stroke="var(--accent-color)" stroke-width="1.6"/><title>${pLabel(s.p)}：${esc(opt.fmt?opt.fmt(s.v):num(s.v))}</title></g>`).join('');
   const labels=series.map((s,i)=>`<text x="${x(i).toFixed(1)}" y="${H-4}" font-size="9" fill="#6c757d" text-anchor="middle">${pMonth(s.p)}月</text>`).join('');
-  return `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+  return `<svg class="trend-svg" viewBox="0 0 ${W} ${H}">
     <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent-color)" stop-opacity=".22"/><stop offset="1" stop-color="var(--accent-color)" stop-opacity="0"/></linearGradient></defs>
     ${area?`<path d="${area}" fill="url(#g1)"/>`:''}${refLine}${tgtLine}
     <path d="${path}" fill="none" stroke="var(--accent-color)" stroke-width="2" stroke-linejoin="round"/>${dots}${labels}</svg>`;
