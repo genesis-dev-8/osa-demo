@@ -226,9 +226,12 @@ const IS_REAL = !!(DATA.meta && DATA.meta.real);   // 実データ版（匿名�
 let AUTHED=(typeof window.__BOOT__!=='undefined'&&window.__BOOT__&&window.__BOOT__.authed)||false;
 try{ if(sessionStorage.getItem('oks_auth')==='1') AUTHED=true; }catch(e){}
 
-/* OSA-24（2-2）: 金額表示は千円単位。カンマ区切りで見やすく。*/
-const yen = n => (n==null?'-':Math.round(n/1000).toLocaleString('ja-JP')+'千円');
-const yenS= n => (n==null?'-':(Math.abs(n)>=1e8?(n/1e8).toFixed(2)+'億円':Math.round(n/1000).toLocaleString('ja-JP')+'千'));
+/* OSA-24（2-2）: 金額表示は千円単位・カンマ区切り。
+   「千」接尾辞はグラフ内の値ラベルだけに付け（yenG）、
+   KPIタイル・テーブル・モーダル等は接尾辞なしの数字のみ（yen/yenS）とする。 */
+const yen = n => (n==null?'-':Math.round(n/1000).toLocaleString('ja-JP'));
+const yenS= n => (n==null?'-':(Math.abs(n)>=1e8?(n/1e8).toFixed(2)+'億':Math.round(n/1000).toLocaleString('ja-JP')));
+const yenG= n => (n==null?'-':(Math.abs(n)>=1e8?(n/1e8).toFixed(2)+'億円':Math.round(n/1000).toLocaleString('ja-JP')+'千'));
 const num = n => (n==null?'-':Number(n).toLocaleString('ja-JP'));
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pct1= n => (n==null||!isFinite(n)?'-':n.toFixed(1)+'%');
@@ -677,7 +680,7 @@ function bcOf(p){
 }
 function barChart(items){
   const max = Math.max(...items.map(i=>i.value),1);
-  return `<div class="chart-bars">${items.map(i=>`<div class="chart-bar-col"><span class="chart-bar-val">${yenS(i.value)}</span><div class="chart-bar-track"><div class="chart-bar" style="height:${Math.max(2,i.value/max*100)}%"></div></div><span class="chart-bar-label">${esc(i.label)}</span></div>`).join('')}</div>`;
+  return `<div class="chart-bars">${items.map(i=>`<div class="chart-bar-col"><span class="chart-bar-val">${yenG(i.value)}</span><div class="chart-bar-track"><div class="chart-bar" style="height:${Math.max(2,i.value/max*100)}%"></div></div><span class="chart-bar-label">${esc(i.label)}</span></div>`).join('')}</div>`;
 }
 function modal(title, body){
   const d=document.createElement('div'); d.className='modal-back'; d.onclick=e=>{if(e.target===d)d.remove()};
@@ -787,8 +790,8 @@ VIEWS.dashboard = ()=>{
     </div>
     <!-- OSA-34：全社報酬（1年折れ線）＋ 時間生産性（直下）を1画面に収める -->
     <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr))">
-      ${trendCard('全社 報酬総額（A事務所＋B事務所＋資産税＋コンサル）',allTrend,yenS,{foot:'1年推移（前月比は右上）／ 当月：'+yen(T.all)})}
-      ${trendCard('時間生産性(直接)（全社）',prodAllTrend,yen,{foot:'報酬 ÷ 直接時間（全社）'})}
+      ${trendCard('全社 報酬総額（A事務所＋B事務所＋資産税＋コンサル）',allTrend,yenG,{foot:'1年推移（前月比は右上）／ 当月：'+yen(T.all)+'千円'})}
+      ${trendCard('時間生産性(直接)（全社）',prodAllTrend,yenG,{foot:'報酬 ÷ 直接時間（全社）'})}
     </div>
     <div class="kpi-card-grid">
       ${kpi('A事務所 (FMS月次)',yen(T.officeA),imp.lines_officeA+'明細')}
@@ -894,9 +897,9 @@ VIEWS['my-performance'] = ()=>{
 
     <!-- OSA-01：指標ごとの月次推移 -->
     <div class="trend-grid">
-      ${trendCard('報酬',seriesFor(e.name,x=>x.total),yenS,{target:intent,foot:'赤破線＝今月の意向額 '+yen(intent)})}
+      ${trendCard('報酬',seriesFor(e.name,x=>x.total),yenG,{target:intent,foot:'赤破線＝今月の意向額 '+yen(intent)+'千円'})}
       ${trendCard('直接労働時間',seriesFor(e.name,x=>x.hours?x.hours.direct:null),v=>num(v)+'h',{ref:avg?avg.direct:null})}
-      ${trendCard('時間生産性(直接)',seriesFor(e.name,x=>x.prodDir),yen,{ref:avg?avg.prodDir:null})}
+      ${trendCard('時間生産性(直接)',seriesFor(e.name,x=>x.prodDir),yenG,{ref:avg?avg.prodDir:null})}
       ${trendCard('受託件数',seriesFor(e.name,x=>x.cases.total),v=>num(v)+'件',{foot:'TKC_CDBの最新状態（月次の履歴なし）'})}
     </div>
     <div class="legend"><span><i style="background:var(--accent-color)"></i>本人</span><span><i style="background:#adb5bd"></i>事務所平均</span><span><i style="background:var(--danger-color)"></i>意向額</span><span>グラフの点にカーソルを合わせると月と数値が出ます</span></div>
@@ -1362,7 +1365,7 @@ VIEWS.team = ()=>{
     <div class="toolbar"><label>チーム</label><span class="seg">${seg.map(s=>`<button class="${which===s?'on':''}" onclick="state.teamTab='${s}';render()">${s}</button>`).join('')}</span>
       <span style="flex:1"></span><span class="record-count">${num(rows.length)}明細 ／ 合計 ${yen(total)}</span></div>
     <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
-      ${trendCard(which+' 請求額の推移',trend,yenS)}
+      ${trendCard(which+' 請求額の推移',trend,yenG)}
       <div class="trend-card"><div class="trend-head"><span class="trend-title">業務分類別（${pLabel(PERIOD)}）</span></div>
         ${Object.entries(byBc).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>`<div class="hrow" style="padding:.3rem 0"><span class="k">${esc(k)}</span><span class="v" style="font-size:.9rem">${yen(v)}</span></div>`).join('')||'<p class="subtitle">データなし</p>'}
       </div>
@@ -1787,7 +1790,7 @@ VIEWS.reconciliation = ()=>{
   <tr><td>前月との担当者変更の検出<span class="req-tag">OSA-13</span></td><td><span class="status-badge status-info">検出</span></td><td class="num">${reassignments(PERIOD)?reassignments(PERIOD).nMoved+'件':'−'}</td></tr>
   </tbody></table></div></div>
   <div class="card"><div class="card-header"><h3 class="card-title">月次の推移（突合の観点）</h3></div><div class="card-body"><div class="trend-grid">
-    ${trendCard('全社 報酬総額',PERIODS.map(p=>({p:p,v:agg(p).totals.all})),yenS)}
+    ${trendCard('全社 報酬総額',PERIODS.map(p=>({p:p,v:agg(p).totals.all})),yenG)}
     ${trendCard('取込明細数',PERIODS.map(p=>({p:p,v:agg(p).import.lines_officeA+agg(p).import.lines_officeB})),v=>num(v)+'件')}
     ${trendCard('未分類',PERIODS.map(p=>({p:p,v:agg(p).import.unmatched.length})),v=>num(v)+'件')}
   </div></div></div>
