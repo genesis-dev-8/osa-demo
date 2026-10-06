@@ -1492,24 +1492,66 @@ VIEWS.masters = ()=>{
 VIEWS['m-bc'] = ()=>{
   if(adminGuard('業務分類マスタ')) return;
   const teams=M.orgs.filter(o=>o.parent);
-  const rows = bcOf().map((bc,i)=>{
+  const order = bcOf();
+  const rows = order.map((bc,i)=>{
     const hid=M.bcHide[bc]||[];
     const chips=teams.map(o=>`<label style="display:inline-flex;align-items:center;gap:.25rem;margin:.1rem .5rem .1rem 0;font-size:.75rem"><input type="checkbox" ${hid.includes(o.name)?'checked':''} onchange="toggleBcHide('${esc(bc)}','${esc(o.name)}',this.checked)">${esc(o.name)}</label>`).join('');
     const exp=M.excludePersonalBc.includes(bc);
-    return `<tr${exp?' style="background:#fff6ec"':''}><td>${i+1}</td><td>${esc(bc)}</td>${PERIODS.map(p=>`<td class="num ${p===PERIOD?'mcol cur':''}">${yenS(agg(p).totals.byBc[bc]||0)}</td>`).join('')}
+    const used = PERIODS.some(p=>(agg(p).totals.byBc[bc]||0)!==0);
+    return `<tr${exp?' style="background:#fff6ec"':''}>
+      <td><input type="number" value="${i+1}" min="1" style="width:60px;text-align:right;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="moveBc('${esc(bc)}',Number(this.value)-1)"></td>
+      <td><input value="${esc(bc)}" style="min-width:180px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="renameBc(${i},this.value)"></td>
+      ${PERIODS.map(p=>`<td class="num ${p===PERIOD?'mcol cur':''}">${yenS(agg(p).totals.byBc[bc]||0)}</td>`).join('')}
       <td style="text-align:center"><input type="checkbox" ${exp?'checked':''} onchange="toggleExPersonal('${esc(bc)}',this.checked)" title="チェックで、この分類は個人の成績からは外れ、全社集計のみに算入されます（紹介料など）"></td>
-      <td><details><summary style="cursor:pointer;font-size:.8rem;color:var(--accent-color)">${hid.length?hid.length+'組織で非表示':'すべて表示'}</summary><div style="padding:.4rem 0">${chips}</div></details></td></tr>`;
+      <td><details><summary style="cursor:pointer;font-size:.8rem;color:var(--accent-color)">${hid.length?hid.length+'組織で非表示':'すべて表示'}</summary><div style="padding:.4rem 0">${chips}</div></details></td>
+      <td><button class="btn btn-outline btn-sm" onclick="removeBc(${i})" ${used?'disabled title="この分類の請求実績があるため削除できません"':''}>削除</button></td>
+    </tr>`;
   }).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">集計画面の軸となる業務分類（表示順）。<b>変更した瞬間に全画面の集計へ反映</b>します。<span class="req-tag">OSA-29・OSA-35（1-3・2-6）</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">集計画面の軸となる業務分類（表示順）。<b>変更した瞬間に全画面の集計へ反映</b>します。分類名の変更・順序入れ替え・追加・削除すべて可能。<span class="req-tag">OSA-29・OSA-35・OSA-37</span></p>
   <div class="note">「その他売上」として寄せる案は不採用です（想定外の項目にも対応できないため）。代わりに、業務分類単位で<b>個人集計から除外</b>のON/OFFを切り替えます。細かい粒度（取引先・請求コード単位）が必要な場合は<a class="clickable" onclick="openTab('m-billing')">請求分類マスタ</a>でコード単位でも設定できます。</div>
-  <div class="toolbar"><input class="form-input" id="newBc" style="max-width:220px" placeholder="追加する業務分類名"><button class="btn btn-primary btn-sm" onclick="addBc()">分類を追加</button><span style="flex:1"></span><span class="subtitle">追加した分類は請求分類マスタで細目コードに割り当てて使用</span></div>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>表示順</th><th>業務分類名</th>${PERIODS.map(p=>`<th class="num">${pMonth(p)}月</th>`).join('')}<th style="text-align:center">個人集計から除外</th><th>表示しない組織（複数選択可）</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+  <div class="toolbar"><input class="form-input" id="newBc" style="max-width:220px" placeholder="追加する業務分類名"><button class="btn btn-primary btn-sm" onclick="addBc()">分類を追加</button><span style="flex:1"></span><span class="subtitle">順序欄の数値を変更すると並び替わります</span></div>
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>表示順</th><th>業務分類名</th>${PERIODS.map(p=>`<th class="num">${pMonth(p)}月</th>`).join('')}<th style="text-align:center">個人集計から除外</th><th>表示しない組織（複数選択可）</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
 };
+function _ensureBcOrder(){ if(!DATA.bcOrder||!DATA.bcOrder.length) DATA.bcOrder=bcOf().slice(); return DATA.bcOrder; }
 window.addBc=()=>{
   const el=document.getElementById('newBc'); const v=(el.value||'').trim();
   if(!v){ alert('業務分類名を入力してください'); return; }
   if(bcOf().includes(v)){ alert('既に存在する業務分類です'); return; }
-  if(!DATA.bcOrder) DATA.bcOrder=[]; DATA.bcOrder=[...bcOf(),v]; render();
+  const o=_ensureBcOrder(); o.push(v); render();
+};
+window.renameBc=(i,newName)=>{
+  const o=_ensureBcOrder(); const old=o[i]; const v=(newName||'').trim();
+  if(!v||v===old){ render(); return; }
+  if(o.some((x,j)=>j!==i && x===v)){ alert('同名の業務分類が既に存在します'); render(); return; }
+  o[i]=v;
+  // 既存の実績データ(lines/consulLines/teamLines)に残っている旧名も付け替え
+  PERIODS.forEach(p=>{
+    MD(p).lines.forEach(l=>{ if(l.bc===old) l.bc=v; });
+    (MD(p).consulLines||[]).forEach(t=>{ if(t.bc===old) t.bc=v; });
+    (MD(p).teamLines||[]).forEach(t=>{ if(t.bc===old) t.bc=v; });
+  });
+  Object.keys(M.codeMap).forEach(k=>{ if(M.codeMap[k]===old) M.codeMap[k]=v; });
+  M.excludePersonalBc = M.excludePersonalBc.map(x=>x===old?v:x);
+  M.sysBc = M.sysBc.map(x=>x===old?v:x);
+  if(M.bcHide[old]){ M.bcHide[v]=M.bcHide[old]; delete M.bcHide[old]; }
+  invalidate(); render();
+};
+window.moveBc=(bc,toIdx)=>{
+  const o=_ensureBcOrder(); const from=o.indexOf(bc);
+  if(from<0) return;
+  toIdx=Math.max(0,Math.min(o.length-1,toIdx|0));
+  o.splice(from,1); o.splice(toIdx,0,bc);
+  render();
+};
+window.removeBc=(i)=>{
+  const o=_ensureBcOrder(); const bc=o[i];
+  if(PERIODS.some(p=>(agg(p).totals.byBc[bc]||0)!==0)){ alert('この分類の請求実績があるため削除できません'); return; }
+  if(!confirm('業務分類「'+bc+'」を削除します。よろしいですか？')) return;
+  o.splice(i,1);
+  M.excludePersonalBc = M.excludePersonalBc.filter(x=>x!==bc);
+  M.sysBc = M.sysBc.filter(x=>x!==bc);
+  delete M.bcHide[bc];
+  invalidate(); render();
 };
 window.toggleExPersonal=(bc,on)=>{
   M.excludePersonalBc = on ? [...new Set([...M.excludePersonalBc,bc])] : M.excludePersonalBc.filter(x=>x!==bc);
@@ -1524,21 +1566,31 @@ window.toggleBcHide=(bc,org,on)=>{
 
 VIEWS['m-billing'] = ()=>{
   if(adminGuard('請求分類マスタ')) return;
+  // 請求データから一意な（請求元,細目コード,報酬細目）を抽出。加えてM.billingMetaの手動追加分も合流。
   const seen={}; const list=[];
-  PERIODS.forEach(p=>MD(p).lines.forEach(l=>{const k=l.office+'|'+l.code+'|'+l.detail; if(!seen[k]&&l.code){seen[k]=1;list.push(l)}}));
+  PERIODS.forEach(p=>MD(p).lines.forEach(l=>{const k=l.office+'|'+l.code+'|'+l.detail; if(!seen[k]&&l.code){seen[k]=1;list.push({office:l.office,code:l.code,detail:l.detail,salesDiv:l.salesDiv,fromData:true})}}));
+  (M.billingMeta||[]).forEach(m=>{ const k=m.office+'|'+m.code+'|'+m.detail; if(!seen[k]){ seen[k]=1; list.push({...m,fromData:false}); }});
   list.sort((a,b)=> a.office===b.office? (a.code>b.code?1:-1) : (a.office>b.office?1:-1));
   if(!state.mbQ) state.mbQ='';
   const q=state.mbQ;
-  const shown=list.filter(l=>!q||l.detail.includes(q)||l.code.includes(q)||effBc(l).includes(q));
+  const shown=list.filter(l=>!q||l.detail.includes(q)||l.code.includes(q)||effBc({office:l.office,code:l.code,bc:''}).includes(q));
   const opts=(cur)=>[...bcOf(),'未分類'].map(b=>`<option ${b===cur?'selected':''}>${esc(b)}</option>`).join('');
+  const officeOpts=(cur)=>['A事務所','B事務所'].map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('');
   const rows=shown.slice(0,200).map(l=>{
-    const key=l.office+'|'+l.code; const cur=effBc(l); const over=!!M.codeMap[key];
+    const key=l.office+'|'+l.code; const cur=effBc({office:l.office,code:l.code,bc:(M.codeMap[key]||'未分類')});
+    const over=!!M.codeMap[key];
     const exCode=!!M.excludePersonalCode[key];
     const exBc=M.excludePersonalBc.includes(cur);
-    return `<tr ${cur==='未分類'?'style="background:#fff8ec"':''}><td>${esc(l.office)}</td><td>${esc(l.code)}</td><td>${esc(l.detail)}</td><td>${esc(l.salesDiv)}</td>
-    <td><select class="form-select" style="min-height:auto;padding:.25rem" onchange="setCodeBc('${esc(key)}',this.value)">${opts(cur)}</select>${over?' <span class="status-badge status-info">変更</span>':''}</td>
-    <td style="text-align:center">${isSysBc(cur)?'<span class="status-badge status-info">シスサポ</span>':(exBc||exCode?'<span class="status-badge status-warning">個人除外</span>':'<span class="subtitle">個人</span>')}</td>
-    <td style="text-align:center"><input type="checkbox" ${exCode?'checked':''} ${exBc?'disabled title="分類単位で既に個人除外されています"':''} onchange="toggleExCode('${esc(key)}',this.checked)"></td></tr>`;
+    const metaIdx=(M.billingMeta||[]).findIndex(m=>m.office===l.office&&m.code===l.code);
+    return `<tr ${cur==='未分類'?'style="background:#fff8ec"':''}>
+      <td><select class="form-select" style="min-height:auto;padding:.25rem;width:84px" ${l.fromData?'disabled title="請求データ由来は請求元の変更不可"':''} onchange="updateBillingMeta(${metaIdx},'office',this.value)">${officeOpts(l.office)}</select></td>
+      <td><input value="${esc(l.code)}" style="width:80px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" ${l.fromData?'disabled title="請求データ由来は細目CDの変更不可"':''} onchange="updateBillingMeta(${metaIdx},'code',this.value)"></td>
+      <td><input value="${esc(l.detail)}" style="min-width:200px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="updateBillingDetail('${esc(l.office)}','${esc(l.code)}',this.value,${metaIdx})"></td>
+      <td><input value="${esc(l.salesDiv||'')}" style="width:80px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="updateBillingMeta(${metaIdx},'salesDiv',this.value)"></td>
+      <td><select class="form-select" style="min-height:auto;padding:.25rem" onchange="setCodeBc('${esc(key)}',this.value)">${opts(cur)}</select>${over?' <span class="status-badge status-info">変更</span>':''}</td>
+      <td style="text-align:center">${isSysBc(cur)?'<span class="status-badge status-info">シスサポ</span>':(exBc||exCode?'<span class="status-badge status-warning">個人除外</span>':'<span class="subtitle">個人</span>')}</td>
+      <td style="text-align:center"><input type="checkbox" ${exCode?'checked':''} ${exBc?'disabled title="分類単位で既に個人除外されています"':''} onchange="toggleExCode('${esc(key)}',this.checked)"></td>
+      <td>${l.fromData?'<span class="subtitle" style="font-size:.7rem">請求データ由来</span>':`<button class="btn btn-outline btn-sm" onclick="removeBillingMeta(${metaIdx})">削除</button>`}</td></tr>`;
   }).join('');
   const un=MD(PERIOD).lines.filter(l=>effBc(l)==='未分類');
   const allBc=[...new Set(PERIODS.flatMap(p=>Object.keys(agg(p).totals.byBc)))];
@@ -1552,11 +1604,49 @@ VIEWS['m-billing'] = ()=>{
   </div></div>
   ${un.length?`<div class="note note-warn"><b>${pLabel(PERIOD)}の未分類が ${un.length}明細（${yen(un.reduce((s,l)=>s+l.amount,0))}）</b>あります（該当コード：${[...new Set(un.map(l=>l.code))].join('・')}）。</div>`:'<div class="note">この月に未分類の請求レコードはありません。</div>'}
   <div class="toolbar"><label>検索</label><input value="${esc(q)}" placeholder="細目名／コード／業務分類" oninput="state.mbQ=this.value;render()"><span style="flex:1"></span><span class="record-count">${shown.length}件</span></div>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>細目コード</th><th>報酬細目</th><th>取引区分</th><th>業務分類（変更可）</th><th style="text-align:center">帰属</th><th style="text-align:center">個人除外<span class="req-tag">OSA-29</span></th></tr></thead><tbody>${rows}</tbody></table></div>${shown.length>200?`<div class="card-body subtitle">上位200件を表示</div>`:''}</div></div>`;
+  <div class="toolbar">
+    <label>追加</label>
+    <select class="form-select" id="newBillOffice" style="width:84px"><option>A事務所</option><option>B事務所</option></select>
+    <input class="form-input" id="newBillCode" style="width:84px" placeholder="細目CD">
+    <input class="form-input" id="newBillDetail" style="min-width:180px" placeholder="報酬細目">
+    <input class="form-input" id="newBillDiv" style="width:84px" placeholder="取引区分">
+    <select class="form-select" id="newBillBc">${['未分類',...bcOf()].map(b=>`<option>${esc(b)}</option>`).join('')}</select>
+    <button class="btn btn-primary btn-sm" onclick="addBillingMeta()">細目を追加</button>
+    <span style="flex:1"></span><span class="subtitle">${shown.length}件表示（請求データ由来${list.filter(x=>x.fromData).length}件＋手動追加${(M.billingMeta||[]).length}件）</span>
+  </div>
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>細目コード</th><th>報酬細目</th><th>取引区分</th><th>業務分類（変更可）</th><th style="text-align:center">帰属</th><th style="text-align:center">個人除外<span class="req-tag">OSA-29</span></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${shown.length>200?`<div class="card-body subtitle">上位200件を表示</div>`:''}</div></div>`;
 };
 window.setCodeBc=(key,bc)=>{ M.codeMap[key]=bc; invalidate(); render(); };
 window.toggleSysBc=(bc,on)=>{ M.sysBc = on ? [...new Set([...M.sysBc,bc])] : M.sysBc.filter(x=>x!==bc); invalidate(); render(); };
 window.toggleExCode=(key,on)=>{ if(on) M.excludePersonalCode[key]=true; else delete M.excludePersonalCode[key]; invalidate(); render(); };
+/* OSA-37：請求分類マスタの直接編集（手動追加・報酬細目の付け替え） */
+window.addBillingMeta=()=>{
+  const o=document.getElementById('newBillOffice').value;
+  const c=(document.getElementById('newBillCode').value||'').trim();
+  const d=(document.getElementById('newBillDetail').value||'').trim();
+  const s=(document.getElementById('newBillDiv').value||'').trim();
+  const b=document.getElementById('newBillBc').value;
+  if(!c||!d){ alert('細目CDと報酬細目は必須です'); return; }
+  if(!M.billingMeta) M.billingMeta=[];
+  if(M.billingMeta.some(m=>m.office===o&&m.code===c)||PERIODS.some(p=>MD(p).lines.some(l=>l.office===o&&l.code===c))){
+    alert('同じ請求元・細目コードが既に存在します'); return;
+  }
+  M.billingMeta.push({office:o,code:c,detail:d,salesDiv:s});
+  if(b&&b!=='未分類') M.codeMap[o+'|'+c]=b;
+  invalidate(); render();
+};
+window.updateBillingMeta=(i,field,v)=>{ if(i<0||!M.billingMeta) return; M.billingMeta[i][field]=v; invalidate(); render(); };
+window.updateBillingDetail=(office,code,newDetail,metaIdx)=>{
+  // 請求データ由来の報酬細目を書き換えた場合は、全期間のlines/consulLinesに反映
+  const v=(newDetail||'').trim(); if(!v) return;
+  if(metaIdx>=0&&M.billingMeta){ M.billingMeta[metaIdx].detail=v; }
+  PERIODS.forEach(p=>MD(p).lines.forEach(l=>{ if(l.office===office&&l.code===code) l.detail=v; }));
+  invalidate(); render();
+};
+window.removeBillingMeta=(i)=>{ if(i<0||!M.billingMeta) return;
+  const m=M.billingMeta[i]; if(!confirm('細目「'+m.detail+'（'+m.code+'）」を削除します。よろしいですか？')) return;
+  M.billingMeta.splice(i,1); invalidate(); render();
+};
 
 VIEWS['m-org'] = ()=>{
   if(adminGuard('組織マスタ')) return;
@@ -1564,14 +1654,41 @@ VIEWS['m-org'] = ()=>{
   const rows=M.orgs.map((o,i)=>{
     const cnt=M.employees.filter(e=>orgChildren(o.name).includes(e.org)).length;
     return `<tr ${orgHidden(o.name)?'style="background:#f4f5f7;color:var(--medium-gray)"':''}>
-    <td>${esc(o.name)}</td>
+    <td><input value="${esc(o.name)}" style="min-width:160px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="renameOrg(${i},this.value)"></td>
     <td><select class="form-select" style="min-height:auto;padding:.25rem" onchange="M.orgs[${i}].parent=this.value;invalidate();render()">${parentOpts(o.parent,o.name)}</select></td>
     <td style="text-align:center"><input type="checkbox" ${o.teamOnly?'checked':''} onchange="M.orgs[${i}].teamOnly=this.checked;render()"></td>
     <td style="text-align:center"><input type="checkbox" ${o.hidden?'checked':''} onchange="M.orgs[${i}].hidden=this.checked;invalidate();render()"></td>
-    <td class="num">${cnt}名</td></tr>`}).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">親組織の設定、チーム単位でのみ集計する組織、非表示区分。<b>ダッシュボード・従業員別成績の集計単位に即時反映</b>されます。<span class="req-tag">OSA-07</span></p>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>組織名</th><th>親組織</th><th style="text-align:center">チーム単位のみ管理</th><th style="text-align:center">非表示区分</th><th class="num">所属</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-  <div class="note">「チーム単位のみ管理」の組織（資産税・システムサポート）は個人別ではなく<a class="clickable" onclick="openTab('team')">チーム集計</a>に集約されます。</div></div>`;
+    <td class="num">${cnt}名</td>
+    <td><button class="btn btn-outline btn-sm" onclick="removeOrg(${i})" ${cnt?'disabled title="所属担当者がいる組織は削除できません"':''}>削除</button></td></tr>`}).join('');
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">親組織の設定、チーム単位でのみ集計する組織、非表示区分。<b>組織名もその場で編集でき、ダッシュボード・従業員別成績の集計単位に即時反映</b>されます。<span class="req-tag">OSA-07・OSA-37</span></p>
+  <div class="toolbar"><input class="form-input" id="newOrgName" style="max-width:220px" placeholder="追加する組織名">
+    <select class="form-select" id="newOrgParent" style="max-width:200px"><option value="">（親組織なし＝ルート）</option>${M.orgs.map(o=>`<option>${esc(o.name)}</option>`).join('')}</select>
+    <button class="btn btn-primary btn-sm" onclick="addOrg()">組織を追加</button></div>
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>組織名</th><th>親組織</th><th style="text-align:center">チーム単位のみ管理</th><th style="text-align:center">非表示区分</th><th class="num">所属</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
+  <div class="note">「チーム単位のみ管理」の組織（資産税・システムサポート）は個人別ではなく<a class="clickable" onclick="openTab('team')">チーム集計</a>に集約されます。組織名を変更すると、担当者マスタ側の所属組織と親子関係の参照も自動で追従します。</div></div>`;
+};
+window.renameOrg=(i,newName)=>{
+  const old=M.orgs[i].name; const v=(newName||'').trim();
+  if(!v||v===old){ render(); return; }
+  if(M.orgs.some((o,j)=>j!==i && o.name===v)){ alert('同名の組織が既に存在します'); render(); return; }
+  M.orgs[i].name=v;
+  M.orgs.forEach(o=>{ if(o.parent===old) o.parent=v; });
+  M.employees.forEach(e=>{ if(e.org===old) e.org=v; });
+  invalidate(); render();
+};
+window.addOrg=()=>{
+  const n=(document.getElementById('newOrgName').value||'').trim();
+  const p=document.getElementById('newOrgParent').value;
+  if(!n){ alert('組織名を入力してください'); return; }
+  if(M.orgs.some(o=>o.name===n)){ alert('同名の組織が既に存在します'); return; }
+  M.orgs.push({name:n,parent:p,teamOnly:false,hidden:false});
+  invalidate(); render();
+};
+window.removeOrg=(i)=>{
+  const o=M.orgs[i]; if(!o) return;
+  if(M.orgs.some(x=>x.parent===o.name)){ alert('この組織を親に持つ組織があるため削除できません'); return; }
+  if(!confirm('組織「'+o.name+'」を削除します。よろしいですか？')) return;
+  M.orgs.splice(i,1); invalidate(); render();
 };
 
 VIEWS['m-service'] = ()=>{
@@ -1595,25 +1712,43 @@ VIEWS['m-employee'] = ()=>{
   if(adminGuard('担当者マスタ')) return;
   const demoUserName = M.employees[1] ? M.employees[1].name : '';
   const orgOpts=(cur)=>M.orgs.filter(o=>o.parent).map(o=>`<option ${o.name===cur?'selected':''}>${esc(o.name)}</option>`).join('');
-  const rows=M.employees.slice(0,25).map((e,i)=>{
+  const limit = state.mEmpLimit || 25;
+  const rows=M.employees.slice(0,limit).map((e,i)=>{
     const pw=pwCheck(e.initPw);
     const pwBadge=e.initPw? (pw.ok?'<span class="status-badge status-valid">OK</span>':'<span class="status-badge status-error">規定違反</span>') : '<span class="subtitle" style="font-size:.7rem">未設定</span>';
     return `<tr ${e.noLogin?'style="background:#f4f5f7;color:var(--medium-gray)"':''}>
-    <td>${esc(e.name)}</td>
+    <td><input value="${esc(e.name)}" style="min-width:120px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.employees[${i}].name=this.value;invalidate();render()"></td>
     <td><select class="form-select" style="min-height:auto;padding:.25rem" onchange="M.employees[${i}].org=this.value;invalidate();render()">${orgOpts(e.org)}</select></td>
     <td><input value="${esc(e.cdb)}" style="width:64px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.employees[${i}].cdb=this.value"></td>
-    <td>${e.kintone?esc(e.kintone):'<span class="status-badge status-warning">未連携</span>'}</td>
+    <td><input value="${esc(e.kintone||'')}" placeholder="未連携" style="width:120px;border:1px solid ${e.kintone?'#ced4da':'var(--warning-color)'};border-radius:4px;padding:.2rem" onchange="M.employees[${i}].kintone=this.value;render()"></td>
     <td><select class="form-select" style="min-height:auto;padding:.25rem;width:100px" onchange="M.employees[${i}].role=this.value;render()"><option value="ADMIN" ${e.role==='ADMIN'?'selected':''}>管理者</option><option value="USER" ${e.role==='USER'?'selected':''}>担当者</option></select></td>
     <td><input type="password" value="${esc(e.initPw)}" placeholder="初期PW" style="width:120px;border:1px solid ${e.initPw&&!pw.ok?'var(--danger-color)':'#ced4da'};border-radius:4px;padding:.2rem" oninput="M.employees[${i}].initPw=this.value;render()"> ${pwBadge}</td>
     <td style="text-align:center"><input type="checkbox" ${e.noLogin?'checked':''} onchange="M.employees[${i}].noLogin=this.checked;render()"></td>
-    <td style="text-align:center"><input type="checkbox" ${e.aiPerm?'checked':''} ${e.role==='ADMIN'?'disabled title="管理者は常に利用可"':''} onchange="setAiPerm('${esc(e.name)}',this.checked)"></td></tr>`}).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">所属組織を組織マスタから選択、CDB担当者コードとkintone IDを紐づけ、権限・初期PW・ログイン不可・AIチャット権限を設定。ログインIDはkintoneと同一。</p>
+    <td style="text-align:center"><input type="checkbox" ${e.aiPerm?'checked':''} ${e.role==='ADMIN'?'disabled title="管理者は常に利用可"':''} onchange="setAiPerm('${esc(e.name)}',this.checked)"></td>
+    <td><button class="btn btn-outline btn-sm" onclick="removeEmp(${i})">削除</button></td></tr>`}).join('');
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">所属組織を組織マスタから選択、CDB担当者コードとkintone IDを紐づけ、権限・初期PW・ログイン不可・AIチャット権限を設定。ログインIDはkintoneと同一。<b>すべての項目を直接編集・追加・削除できます</b>。<span class="req-tag">OSA-37</span></p>
   <div class="note"><b>パスワードポリシー</b>：大文字・小文字の英字／数字／記号の4種すべてを含む<b>10桁以上</b>。初回ログイン時にPW変更が強制されます（<a class="clickable" onclick="firstLoginDemo()">動作を見る</a>）。<br>
   <b>AIチャット権限</b>は社長・幹部のみに付与する運用です（マスタで許可された担当者のみメニューに表示）。</div>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>担当者氏名</th><th>所属組織</th><th>CDB担当者CD</th><th>kintone ID（ログインID）</th><th>権限</th><th>初期PW</th><th style="text-align:center">ログイン不可</th><th style="text-align:center">AIチャット権限</th></tr></thead><tbody>${rows}</tbody></table></div>
-  <div class="card-body subtitle">全${M.employees.length}名のうち上位25名を表示</div></div>
+  <div class="toolbar"><input class="form-input" id="newEmpName" style="max-width:200px" placeholder="追加する担当者氏名">
+    <button class="btn btn-primary btn-sm" onclick="addEmp()">担当者を追加</button>
+    ${M.employees.length>limit?`<button class="btn btn-outline btn-sm" onclick="state.mEmpLimit=M.employees.length;render()">全${M.employees.length}名を表示</button>`:''}
+    <span style="flex:1"></span><span class="record-count">${M.employees.length}名</span></div>
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>担当者氏名</th><th>所属組織</th><th>CDB担当者CD</th><th>kintone ID（ログインID）</th><th>権限</th><th>初期PW</th><th style="text-align:center">ログイン不可</th><th style="text-align:center">AIチャット権限</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  ${M.employees.length>limit?`<div class="card-body subtitle">全${M.employees.length}名のうち上位${limit}名を表示</div>`:''}</div>
   <div class="note-warn note">デモ確認：担当者代表「${esc(demoUserName)}」のAIチャット権限を切り替えると、「担当者として表示」時にAIチャットメニューが出る／消えるのを確認できます（現在：${state.aiUser?'あり':'なし'}）。</div>
   </div>`;
+};
+window.addEmp=()=>{
+  const el=document.getElementById('newEmpName'); const v=(el.value||'').trim();
+  if(!v){ alert('担当者氏名を入力してください'); return; }
+  const defOrg = (M.orgs.find(o=>o.parent)||{}).name || '';
+  M.employees.push({name:v,office:'A事務所',org:defOrg,cdb:'',kintone:'',role:'USER',aiPerm:false,noLogin:false,initPw:''});
+  invalidate(); render();
+};
+window.removeEmp=(i)=>{
+  const e=M.employees[i]; if(!e) return;
+  if(!confirm('担当者「'+e.name+'」を削除します。関連する実績は履歴として残ります。よろしいですか？')) return;
+  M.employees.splice(i,1); invalidate(); render();
 };
 window.setAiPerm=(name,val)=>{
   state.aiPerm[name]=val;
@@ -1684,24 +1819,74 @@ window.addAllocRow=()=>{ const c=clientList()[0];
 
 VIEWS['m-indirect'] = ()=>{
   if(adminGuard('業務日報間接時間マスタ')) return;
-  const rows = INDIRECT_MASTER.map((n,i)=>`<tr><td>${i+1}</td><td>（間接業務）</td><td>${esc(n)}</td></tr>`).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">TKC日報形式の間接業務判定マスタ（ver3）。「関与先名」＝「（間接業務）」の行で、下表の「業務名・活動名」に該当するレコードを<b>間接時間</b>として扱います。<span class="req-tag">OSA-36</span></p>
+  // M.indirect がなければ INDIRECT_MASTER を初期値として割り当て
+  if(!M.indirect) M.indirect = INDIRECT_MASTER.map(n=>({client:'（間接業務）',name:n}));
+  const rows = M.indirect.map((r,i)=>`<tr>
+    <td>${i+1}</td>
+    <td><input value="${esc(r.client)}" style="min-width:140px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.indirect[${i}].client=this.value;invalidate();render()"></td>
+    <td><input value="${esc(r.name)}" style="min-width:260px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.indirect[${i}].name=this.value;invalidate();render()"></td>
+    <td><button class="btn btn-outline btn-sm" onclick="removeIndirect(${i})">削除</button></td></tr>`).join('');
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">TKC日報形式の間接業務判定マスタ（ver3）。「関与先名」＋「業務名・活動名」の2軸判定で<b>間接時間</b>として扱います。<b>すべての項目を編集・追加・削除できます</b>。<span class="req-tag">OSA-36・OSA-37</span></p>
   <div class="note">旧 kintone 日報の「業務分類＝間接業務／決裁業務／研修・会議／保険提案／委員会・プロジェクト／研修講師・育成業務／税理士固有業務」から、<b>TKC日報の2軸判定（関与先名＋業務名）に差替</b>（ver3）。既存の集計は旧ロジックで動作中。TKC日報の実取込時にこのマスタに切り替えます。</div>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>No.</th><th>関与先名（固定）</th><th>業務名・活動名</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+  <div class="toolbar">
+    <input class="form-input" id="newIndClient" style="max-width:160px" placeholder="関与先名（例: （間接業務））" value="（間接業務）">
+    <input class="form-input" id="newIndName" style="max-width:260px" placeholder="業務名・活動名">
+    <button class="btn btn-primary btn-sm" onclick="addIndirect()">項目を追加</button>
+    <span style="flex:1"></span><span class="record-count">${M.indirect.length}項目</span>
+  </div>
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>No.</th><th>関与先名</th><th>業務名・活動名</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
   </div>`;
+};
+window.addIndirect=()=>{
+  const c=(document.getElementById('newIndClient').value||'').trim();
+  const n=(document.getElementById('newIndName').value||'').trim();
+  if(!c||!n){ alert('関与先名と業務名を入力してください'); return; }
+  if(!M.indirect) M.indirect=[]; M.indirect.push({client:c,name:n}); invalidate(); render();
+};
+window.removeIndirect=(i)=>{
+  const r=M.indirect[i]; if(!r) return;
+  if(!confirm('間接時間マスタ「'+r.name+'」を削除します。よろしいですか？')) return;
+  M.indirect.splice(i,1); invalidate(); render();
 };
 VIEWS['m-client'] = ()=>{
   if(adminGuard('関与先コード紐づけ')) return;
+  const officeOpts=(cur)=>['A事務所','B事務所'].map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('');
   const rows=M.clientMap.map((c,i)=>{
     const n=MD(PERIOD).lines.filter(l=>l.office===c.office&&l.clientCode===c.from);
-    return `<tr ${c.to?'':'style="background:#fff8ec"'}><td>${esc(c.office)}</td><td>${esc(c.from)}</td><td>${esc(c.name)}</td>
+    return `<tr ${c.to?'':'style="background:#fff8ec"'}>
+      <td><select class="form-select" style="min-height:auto;padding:.2rem;width:84px" onchange="M.clientMap[${i}].office=this.value;invalidate();render()">${officeOpts(c.office)}</select></td>
+      <td><input value="${esc(c.from)}" style="width:84px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.clientMap[${i}].from=this.value;invalidate();render()"></td>
+      <td><input value="${esc(c.name)}" style="min-width:200px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.clientMap[${i}].name=this.value;render()"></td>
       <td class="num">${n.length}</td><td class="num">${yen(n.reduce((s,l)=>s+l.amount,0))}</td>
       <td><input value="${esc(c.to)}" placeholder="紐づけ先コード（3桁）" style="width:150px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.clientMap[${i}].to=this.value;invalidate();render()"></td>
-      <td>${c.to?'<span class="status-badge status-valid">紐づけ済</span>':'<span class="status-badge status-warning">未紐づけ</span>'}</td></tr>`;
+      <td>${c.to?'<span class="status-badge status-valid">紐づけ済</span>':'<span class="status-badge status-warning">未紐づけ</span>'}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="removeClientMap(${i})">削除</button></td></tr>`;
   }).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">原則は取込データ内の関与先コードで集計しますが、<b>4桁の関与先コードが混在</b>するため、イレギュラー対応として紐づけます。</p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">原則は取込データ内の関与先コードで集計しますが、<b>4桁の関与先コードが混在</b>するため、イレギュラー対応として紐づけます。<b>すべての項目を編集・追加・削除できます</b>。<span class="req-tag">OSA-37</span></p>
   <div class="note">全期間の実データに<b>4桁コードが${M.clientMap.length}件</b>存在します（紐づけ済 ${M.clientMap.filter(c=>c.to).length}/${M.clientMap.length}）。</div>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>元の関与先CD</th><th>関与先名</th><th class="num">明細(${pMonth(PERIOD)}月)</th><th class="num">金額</th><th>紐づけ先CD</th><th>状態</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+  <div class="toolbar">
+    <label>追加</label>
+    <select class="form-select" id="newCliOffice" style="width:84px"><option>A事務所</option><option>B事務所</option></select>
+    <input class="form-input" id="newCliFrom" style="width:100px" placeholder="元のCD">
+    <input class="form-input" id="newCliName" style="min-width:160px" placeholder="関与先名">
+    <input class="form-input" id="newCliTo" style="width:120px" placeholder="紐づけ先CD">
+    <button class="btn btn-primary btn-sm" onclick="addClientMap()">紐づけを追加</button>
+  </div>
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>元の関与先CD</th><th>関与先名</th><th class="num">明細(${pMonth(PERIOD)}月)</th><th class="num">金額</th><th>紐づけ先CD</th><th>状態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+};
+window.addClientMap=()=>{
+  const o=document.getElementById('newCliOffice').value;
+  const f=(document.getElementById('newCliFrom').value||'').trim();
+  const n=(document.getElementById('newCliName').value||'').trim();
+  const t=(document.getElementById('newCliTo').value||'').trim();
+  if(!f){ alert('元の関与先CDは必須です'); return; }
+  M.clientMap.push({office:o,from:f,name:n,to:t});
+  invalidate(); render();
+};
+window.removeClientMap=(i)=>{
+  const c=M.clientMap[i]; if(!c) return;
+  if(!confirm('関与先コードの紐づけ「'+c.from+' → '+c.to+'」を削除します。よろしいですか？')) return;
+  M.clientMap.splice(i,1); invalidate(); render();
 };
 
 /* ---------- 来期の意向入力（OSA-14：ノルマではなく意向） ---------- */
