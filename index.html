@@ -677,7 +677,7 @@ function bcOf(p){
 }
 function barChart(items){
   const max = Math.max(...items.map(i=>i.value),1);
-  return `<div class="chart-bars">${items.map(i=>`<div class="chart-bar-col"><span class="chart-bar-val">${i.value>=1e6?(i.value/1e6).toFixed(1)+'M':num(i.value)}</span><div class="chart-bar-track"><div class="chart-bar" style="height:${Math.max(2,i.value/max*100)}%"></div></div><span class="chart-bar-label">${esc(i.label)}</span></div>`).join('')}</div>`;
+  return `<div class="chart-bars">${items.map(i=>`<div class="chart-bar-col"><span class="chart-bar-val">${yenS(i.value)}</span><div class="chart-bar-track"><div class="chart-bar" style="height:${Math.max(2,i.value/max*100)}%"></div></div><span class="chart-bar-label">${esc(i.label)}</span></div>`).join('')}</div>`;
 }
 function modal(title, body){
   const d=document.createElement('div'); d.className='modal-back'; d.onclick=e=>{if(e.target===d)d.remove()};
