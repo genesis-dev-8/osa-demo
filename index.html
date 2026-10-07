@@ -232,6 +232,18 @@ try{ if(sessionStorage.getItem('oks_auth')==='1') AUTHED=true; }catch(e){}
 const yen = n => (n==null?'-':Math.round(n/1000).toLocaleString('ja-JP'));
 const yenS= n => (n==null?'-':(Math.abs(n)>=1e8?(n/1e8).toFixed(2)+'億':Math.round(n/1000).toLocaleString('ja-JP')));
 const yenG= n => (n==null?'-':(Math.abs(n)>=1e8?(n/1e8).toFixed(2)+'億円':Math.round(n/1000).toLocaleString('ja-JP')+'千'));
+/* グラフ用：値分布から千円/円の表記を決める（グラフ内は統一）。
+   10万以上の値が過半数のとき → 千円単位＋「千円」接尾辞、
+   それ以外 → 円そのまま＋「円」接尾辞。 */
+function chartMoneyFmt(vals){
+  const nums = (vals||[]).filter(v => v!=null && isFinite(v));
+  if(!nums.length) return v => (v==null?'-':Number(v).toLocaleString('ja-JP'));
+  const big = nums.filter(v => Math.abs(v) >= 1e5).length;
+  if(big*2 >= nums.length){
+    return v => (v==null?'-':Math.round(v/1000).toLocaleString('ja-JP')+'千円');
+  }
+  return v => (v==null?'-':Math.round(v).toLocaleString('ja-JP')+'円');
+}
 const num = n => (n==null?'-':Number(n).toLocaleString('ja-JP'));
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pct1= n => (n==null||!isFinite(n)?'-':n.toFixed(1)+'%');
@@ -680,7 +692,8 @@ function bcOf(p){
 }
 function barChart(items){
   const max = Math.max(...items.map(i=>i.value),1);
-  return `<div class="chart-bars">${items.map(i=>`<div class="chart-bar-col"><span class="chart-bar-val">${yenG(i.value)}</span><div class="chart-bar-track"><div class="chart-bar" style="height:${Math.max(2,i.value/max*100)}%"></div></div><span class="chart-bar-label">${esc(i.label)}</span></div>`).join('')}</div>`;
+  const fmt = chartMoneyFmt(items.map(i=>i.value));
+  return `<div class="chart-bars">${items.map(i=>`<div class="chart-bar-col"><span class="chart-bar-val">${fmt(i.value)}</span><div class="chart-bar-track"><div class="chart-bar" style="height:${Math.max(2,i.value/max*100)}%"></div></div><span class="chart-bar-label">${esc(i.label)}</span></div>`).join('')}</div>`;
 }
 function modal(title, body){
   const d=document.createElement('div'); d.className='modal-back'; d.onclick=e=>{if(e.target===d)d.remove()};
@@ -725,6 +738,7 @@ function lineChart(series, opt){
 }
 function trendCard(title,series,fmt,opt){
   opt=opt||{};
+  if(fmt===yenG) fmt=chartMoneyFmt(series.map(s=>s.v));
   const cur=series[pIdx(PERIOD)]?series[pIdx(PERIOD)].v:null;
   const pv=pIdx(PERIOD)>0?series[pIdx(PERIOD)-1].v:null;
   return `<div class="trend-card">
