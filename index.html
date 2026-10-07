@@ -226,7 +226,7 @@ const IS_REAL = !!(DATA.meta && DATA.meta.real);   // 実データ版（匿名�
 let AUTHED=(typeof window.__BOOT__!=='undefined'&&window.__BOOT__&&window.__BOOT__.authed)||false;
 try{ if(sessionStorage.getItem('oks_auth')==='1') AUTHED=true; }catch(e){}
 
-/* OSA-24（2-2）: 金額表示は千円単位・カンマ区切り。
+/* : 金額表示は千円単位・カンマ区切り。
    「千」接尾辞はグラフ内の値ラベルだけに付け（yenG）、
    KPIタイル・テーブル・モーダル等は接尾辞なしの数字のみ（yen/yenS）とする。 */
 const yen = n => (n==null?'-':Math.round(n/1000).toLocaleString('ja-JP'));
@@ -236,7 +236,7 @@ const num = n => (n==null?'-':Number(n).toLocaleString('ja-JP'));
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pct1= n => (n==null||!isFinite(n)?'-':n.toFixed(1)+'%');
 
-/* ===== 期間（OSA-01/02/04/12：月次推移を全画面の前提にする） ===== */
+/* ===== 期間（/02/04/12：月次推移を全画面の前提にする） ===== */
 const PERIODS = DATA.meta.periods.slice();           // ['2026-06','2026-07','2026-08']
 const FY_START = DATA.meta.fyStartMonth || 11;       // 事業年度の開始月（11月〜翌10月）
 let PERIOD = DATA.meta.current || PERIODS[PERIODS.length-1];
@@ -255,8 +255,8 @@ let CLOSED = {};              // 月ごとの締め状態 {period:true}
 const state = { emp:null, targets:{}, services:{}, confirms:{}, aiUser:false, aiPerm:{},
   rowConfirm:{}, submitted:{}, closeEmp:null, teamTab:null, nf:null, nippoImported:true,
   dashScope:'all', expand:{}, cmpMode:'prev',
-  reassignReason:{}, /* OSA-32（2-4）：担当変更検出 要確認の理由 */
-  billingEdits:{}   /* OSA-33（2-5）：取込データの管理者編集（担当者差し替え等） */
+  reassignReason:{}, /* ：担当変更検出 要確認の理由 */
+  billingEdits:{}   /* ：取込データの管理者編集（担当者差し替え等） */
 };
 if(window.__BOOT__){
   if(window.__BOOT__.role) ROLE=window.__BOOT__.role;
@@ -299,8 +299,8 @@ const M = {
   employees: [],
   bcHide: {},
   codeMap: {},              // 'office|細目CD' -> 業務分類（請求分類マスタの上書き）
-  sysBc: (DATA.sysBc||[]).slice(),   // OSA-05：シスサポチームへ帰属させる業務分類
-  /* OSA-29（1-3）：個人集計からは外すが全社集計には含める業務分類（紹介料など）。
+  sysBc: (DATA.sysBc||[]).slice(),   // ：シスサポチームへ帰属させる業務分類
+  /* ：個人集計からは外すが全社集計には含める業務分類（紹介料など）。
      「その他売上」として寄せる案は不採用（想定外項目にも対応できないため）。
      粒度は業務分類単位。追加の細目コード単位は excludePersonalCode で指定可能。 */
   excludePersonalBc: ['紹介料'],
@@ -312,7 +312,7 @@ const M = {
 };
 const NAME2ID = {}; Object.keys(DATA.id2name||{}).forEach(k=>{ NAME2ID[DATA.id2name[k]]=k; });
 
-/* OSA-36（マスタ反映）：業務日報間接時間マスタ（ver3）
+/* （マスタ反映）：業務日報間接時間マスタ（ver3）
    TKC日報の「関与先名」が「（間接業務）」のとき、下記の「業務名・活動名」で間接時間を判定する。
    旧 kintone 日報（業務分類で判定）の INDIRECT とは別軸。 */
 const INDIRECT_MASTER = [
@@ -357,7 +357,7 @@ function bcVisibleFor(bc, empName){ const hid=M.bcHide[bc]; if(!hid||!hid.length
   return !hid.some(h=>orgChildren(h).includes(orgOf(empName))); }
 function mapClientCode(office,code){ const m=M.clientMap.find(c=>c.office===office&&c.from===code); return (m&&m.to)?m.to:code; }
 function effBc(l){ return M.codeMap[l.office+'|'+l.code] || l.bc; }
-/* OSA-33（2-5）：取込データの管理者編集 ― 担当者差し替え。再取込不要で即時反映。 */
+/* ：取込データの管理者編集 ― 担当者差し替え。再取込不要で即時反映。 */
 function billingKey(l){ return l.office+'|'+l.voucher+'|'+l.code+'|'+l.clientCode; }
 function effEmp(l){
   const ed=state.billingEdits[billingKey(l)];
@@ -398,8 +398,8 @@ function agg(p){
     const bc=effBc(l), code=mapClientCode(l.office,l.clientCode);
     officeTot[l.office]=(officeTot[l.office]||0)+l.amount;
     bcTot[bc]=(bcTot[bc]||0)+l.amount;
-    if(isSysBc(bc)){ sysLines.push(l); return; }            // OSA-05：個人へ帰属させない（別チームに集約）
-    if(isExcludePersonal(bc,l.office,l.code)){              // OSA-29：個人集計から外す（全社集計には含まれる）
+    if(isSysBc(bc)){ sysLines.push(l); return; }            // ：個人へ帰属させない（別チームに集約）
+    if(isExcludePersonal(bc,l.office,l.code)){              // ：個人集計から外す（全社集計には含まれる）
       excludedPersonal.push(l); return;
     }
     const empUsed=effEmp(l);
@@ -407,7 +407,7 @@ function agg(p){
     if(rule){ rule.shares.forEach(s=>{ if(s.emp) add(s.emp,(ALL_EMPS.find(x=>x.name===s.emp)||{}).office||l.office,bc,code,l.client,Math.round(l.amount*(Number(s.pct)||0)/100),'FMS'); }); }
     else add(empUsed,l.office,bc,code,l.client,l.amount,'FMS');
   });
-  // OSA-06：コンサル報酬は個人へ帰属
+  // ：コンサル報酬は個人へ帰属
   md.consulLines.forEach(t=>{
     bcTot[t.bc]=(bcTot[t.bc]||0)+t.amount;
     if(t.empResolved) add(t.emp,DATA.staffOffice[t.emp]||'A事務所',t.bc,t.code||'—',t.client,t.amount,'kintone');
@@ -453,7 +453,7 @@ function agg(p){
 const A = ()=>agg(PERIOD);
 const empOf = (p,name)=>agg(p).employees.find(e=>e.name===name)||null;
 
-/* ---------- 事務所平均（OSA-03） ---------- */
+/* ---------- 事務所平均（） ---------- */
 function officeAvg(p,office){
   const list=agg(p).employees.filter(e=>(!office||e.office===office)&&e.hours&&e.hours.direct>0&&!orgHidden(orgOf(e.name)));
   if(!list.length) return null;
@@ -463,7 +463,7 @@ function officeAvg(p,office){
     prodMedian: (()=>{const a=list.map(e=>e.prodDir).filter(Boolean).sort((x,y)=>x-y);return a.length?a[Math.floor(a.length/2)]:null})()};
 }
 
-/* ---------- 目標＝意向（OSA-14）：既定値は前月実績 ---------- */
+/* ---------- 目標＝意向（）：既定値は前月実績 ---------- */
 function intentOf(emp,p){
   const k=emp+'|'+p;
   if(state.targets[k]!=null&&state.targets[k]!=='') return Number(state.targets[k]);
@@ -478,13 +478,13 @@ function ytd(emp,p){
   return {periods:ps,actual:act,intent:int_,rate:int_?act/int_*100:null};
 }
 
-/* ---------- 担当者異動の検出（OSA-13） ----------
+/* ---------- 担当者異動の検出（） ----------
    ・移管    ：前月と当月の両方に請求があり、担当者が入れ替わっている＝真の担当変更
    ・当月請求なし：前月にあり当月に請求がない（年一関与など請求サイクルの可能性あり）＝参考表示
    ・新規    ：当月から請求が発生した関与先
    ※ 本来はTKC_CDBの担当者を月次スナップショットで差分比較する。現時点でTKC_CDBは
       最新1本しか提供されていないため、FMS請求実績の担当者を代替として突合している。 */
-/* OSA-28（1-5）: 受託件数の関与先一覧（TKCマスタ②からの派生）
+/* : 受託件数の関与先一覧（TKCマスタ②からの派生）
    build時のサイクル判定（毎月/隔月/年一）が demo-data.json には保持されていないため、
    同画面では「担当関与先の一覧」を提示する。将来の再ビルドでサイクル判定も含めて保存すれば、
    「毎月」「隔月」「年一」ごとに絞って出せる想定。 */
@@ -504,7 +504,7 @@ window.drillCases = (empName)=>{
     return `<tr><td>${esc(c.office)}</td><td>${esc(c.code)}</td><td>${esc(c.name)}</td><td class="subtitle">${esc(c.kessan||'')}</td><td class="subtitle">${esc(svcText)}</td></tr>`;
   }).join('');
   modal(`${empName} ｜ 担当関与先 一覧（${list.length}件）`,
-    `<p class="subtitle">TKCマスタ②（所内管理情報）に紐づいた関与先の一覧。<b>何が増えて何が減ったか</b>の確認はこの一覧と前月取込分の差分で行います。<span class="req-tag">OSA-28（1-5）</span></p>
+    `<p class="subtitle">TKCマスタ②（所内管理情報）に紐づいた関与先の一覧。<b>何が増えて何が減ったか</b>の確認はこの一覧と前月取込分の差分で行います。</p>
      <div class="table-wrapper"><table class="data-table"><thead><tr><th>ｵﾌｨｽ</th><th>関与先CD</th><th>関与先名</th><th>決算月</th><th>TKC導入サービス</th></tr></thead>
      <tbody>${rows||'<tr><td colspan=5 style="text-align:center">該当なし</td></tr>'}</tbody></table></div>`);
 };
@@ -545,7 +545,7 @@ function pwCheck(pw){ pw=pw||'';
   const r={len:pw.length>=10,upper:/[A-Z]/.test(pw),lower:/[a-z]/.test(pw),digit:/\d/.test(pw),sym:/[^A-Za-z0-9]/.test(pw)};
   r.ok=r.len&&r.upper&&r.lower&&r.digit&&r.sym; return r; }
 
-/* ---------- ナビゲーション（OSA-09：日本語表記） ---------- */
+/* ---------- ナビゲーション（：日本語表記） ---------- */
 const NAV = [
  {title:'分析', items:[
    {path:'dashboard',label:'ダッシュボード',icon:'▣'},
@@ -640,17 +640,17 @@ function render(){
         <span class="header-user">${ROLE==='ADMIN'?'admin@sample-soken.jp':'user@sample-soken.jp'}（${roleJa(ROLE)}）</span>
         <button class="logout-button" onclick="switchRole()">${ROLE==='ADMIN'?'担当者として表示':'管理者として表示'}</button>
         <button class="logout-button" onclick="alert('デモ画面のためログアウトは無効です')">ログアウト</button>
-      </div>
+</div>
     </header>
     <nav class="topnav">${nav}</nav>
     ${IS_REAL?'<div style="background:#fbeceb;color:#a8332f;border-bottom:1px solid #f1c7c4;padding:.4rem 1rem;font-size:.78rem;font-weight:700;text-align:center;letter-spacing:.02em">実データ版（匿名化なし）― 関与先名・担当者名・個人名は実名です。社外への持ち出し・公開URLへの掲載は禁止</div>':''}
     <main class="main-content">
       <div class="page-header"><h1 class="page-title">${esc(TITLES[route]||'')}${closedBadge}</h1>
         <div class="page-breadcrumb"><span class="breadcrumb-current">対象月：${pLabel(PERIOD)}（取込済み ${PERIODS.length}ヶ月：${PERIODS.map(pLabel).join('・')}）</span></div>
-      </div>
+</div>
       <div class="page-content"><div class="page-transition" id="view"></div></div>
     </main>
-  </div>`;
+</div>`;
   (VIEWS[route]||VIEWS.dashboard)();
 }
 window.switchRole=()=>{
@@ -662,9 +662,9 @@ window.switchRole=()=>{
 const $view = ()=>document.getElementById('view');
 
 /* ---------- 共通部品 ---------- */
-/* OSA-30（マスタ反映）：業務分類マスタ（ver3）順。グループは個人ページの分類別内訳で使用 */
+/* （マスタ反映）：業務分類マスタ（ver3）順。グループは個人ページの分類別内訳で使用 */
 const BC_MASTER=['監査報酬','巡回監査決算料','年一関与決算料','年末調整計算料','個人確定申告報酬','月次コンサル','その他コンサル','M&A','相続税申告報酬','相続税試算報酬','株式評価報酬','（資）贈与税申告報酬','（資）所得税申告報酬','コンサルティング業務委託報酬','（資）その他報酬','システムレンタル料','システム立ち上げ','（シス）経理代行','（シス）給与代行','システムコンサル','（シス）その他報酬','その他','B事務所シスサポ','モニタリング費','経営力向上計画の新規申請','経営力向上計画の変更申請','紹介料','税務相談料'];
-/* OSA-31（1-1）：個人ページ 報酬内訳を「監査／コンサル／資産税／その他」のグループで表示 */
+/* ：個人ページ 報酬内訳を「監査／コンサル／資産税／その他」のグループで表示 */
 const BC_GROUP = {
   '監査':['監査報酬','巡回監査決算料','年一関与決算料','年末調整計算料','個人確定申告報酬'],
   'コンサル':['月次コンサル','その他コンサル','M&A','システムコンサル','システム立ち上げ','（シス）経理代行','（シス）給与代行','（シス）その他報酬','コンサルティング業務委託報酬','モニタリング費','経営力向上計画の新規申請','経営力向上計画の変更申請'],
@@ -691,7 +691,7 @@ window.go=go;
 const kpi=(l,v,h)=>`<div class="kpi-card"><span class="kpi-card-label">${l}</span><span class="kpi-card-value">${v}</span><span class="kpi-card-hint">${h||''}</span></div>`;
 const tile=(k,v)=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 
-/* ===== OSA-01：推移折れ線（SVG・依存ライブラリなし） ===== */
+/* ===== ：推移折れ線（SVG・依存ライブラリなし） ===== */
 function deltaTag(cur,prev){
   if(prev==null||cur==null||!prev) return '<span class="trend-delta delta-flat">前月比 −</span>';
   const d=(cur-prev)/Math.abs(prev)*100;
@@ -732,14 +732,14 @@ function trendCard(title,series,fmt,opt){
     <div class="trend-now">${cur==null?'-':fmt(cur)}</div>
     ${lineChart(series,Object.assign({fmt:fmt},opt))}
     <div class="trend-foot">${opt.foot||PERIODS.map(p=>pMonth(p)+'月').join('→')+' の推移'}${opt.ref!=null?'　<span style="color:#868e96">− − 事務所平均</span>':''}</div>
-  </div>`;
+</div>`;
 }
 function seriesFor(emp,pick){ return PERIODS.map(p=>{ const e=empOf(p,emp); return {p:p,v:e?pick(e):null}; }); }
 
 /* ============================================================ VIEWS */
 const VIEWS = {};
 
-/* ---------- ダッシュボード（OSA-07：組織マスタ階層で集計単位を切替） ---------- */
+/* ---------- ダッシュボード（：組織マスタ階層で集計単位を切替） ---------- */
 function scopeEmployees(p,scope){
   let list=agg(p).employees.filter(e=>empVisible(e.name));
   if(scope&&scope!=='all'){
@@ -770,7 +770,7 @@ VIEWS.dashboard = ()=>{
     return {p:p,v:d?Math.round(f/d):null};
   });
   const top = scopeEmployees(PERIOD,scope).slice(0,8);
-  // チーム別 生産性比較（OSA-07）
+  // チーム別 生産性比較（）
   const teams=M.orgs.filter(o=>o.parent&&!o.hidden);
   const teamRows=teams.map(o=>{ const s=scopeTotals(PERIOD,o.name); const sp=prevPeriod(PERIOD)?scopeTotals(prevPeriod(PERIOD),o.name):null;
     return {name:o.name,parent:o.parent,...s,prevFee:sp?sp.fee:null}; }).filter(r=>r.n>0)
@@ -778,7 +778,7 @@ VIEWS.dashboard = ()=>{
   const compAvg=st.prodDir;
   $view().innerHTML = `
   <div class="page-wrap">
-    <p class="subtitle">${pLabel(PERIOD)}度 集計結果 ｜ 元データ：FMS請求実績(A事務所・B事務所)・資産税/コンサル(kintone)・業務日報(kintone)・TKCマスタ。<b>2026年6月・7月・8月の実データ＋前後月の仮想データ（計12ヶ月）で推移を表示</b>。<span class="req-tag">OSA-34（2-1）</span></p>
+    <p class="subtitle">${pLabel(PERIOD)}度 集計結果 ｜ 元データ：FMS請求実績（A事務所・B事務所）・資産税／コンサル（kintone）・業務日報（kintone）・TKCマスタ</p>
     <div class="toolbar">
       <label>集計単位</label>
       <select class="form-select" style="max-width:260px" onchange="state.dashScope=this.value;render()">
@@ -786,21 +786,21 @@ VIEWS.dashboard = ()=>{
       </select>
       <span class="record-count">${st.n} 名</span>
       <span style="flex:1"></span>
-      <span class="subtitle">議事録9/25：全社報酬を1年分1本・時間生産性を直下・前月比付き。</span>
-    </div>
-    <!-- OSA-34：全社報酬（1年折れ線）＋ 時間生産性（直下）を1画面に収める -->
+      <span class="subtitle">組織マスタの親子階層に沿って、全社／オフィス／チームを切り替えます</span>
+</div>
+    
     <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr))">
       ${trendCard('全社 報酬総額（A事務所＋B事務所＋資産税＋コンサル）',allTrend,yenG,{foot:'1年推移（前月比は右上）／ 当月：'+yen(T.all)+'千円'})}
       ${trendCard('時間生産性(直接)（全社）',prodAllTrend,yenG,{foot:'報酬 ÷ 直接時間（全社）'})}
-    </div>
+</div>
     <div class="kpi-card-grid">
       ${kpi('A事務所 (FMS月次)',yen(T.officeA),imp.lines_officeA+'明細')}
       ${kpi('B事務所 (FMS月次)',yen(T.officeB),imp.lines_officeB+'明細')}
       ${kpi('資産税チーム',yen(T.teamShisan),'kintone資産税アプリ')}
-      ${kpi('コンサル（個人帰属）',yen(T.consul),'OSA-06により個人へ')}
-      ${kpi('シスサポチーム',yen(T.teamSys),'OSA-05によりチームへ')}
+      ${kpi('コンサル（個人帰属）',yen(T.consul),'kintone請求データ')}
+      ${kpi('シスサポチーム',yen(T.teamSys),'システムレンタル料等を集約')}
       ${kpi('全社 報酬総額',yen(T.all),'A事務所＋B事務所＋資産税＋コンサル')}
-    </div>
+</div>
     <div class="bar2">
       <div class="card"><div class="card-header"><h3 class="card-title">業務分類別 報酬 (上位8)</h3></div><div class="card-body">${barChart(bcItems)}</div></div>
       <div class="card"><div class="card-header"><h3 class="card-title">取込サマリー（${pLabel(PERIOD)}）</h3></div><div class="card-body">
@@ -811,11 +811,11 @@ VIEWS.dashboard = ()=>{
           ${tile('未分類 警告',num(imp.unmatched.length))}
           ${tile('スキップ行',num(imp.skipped.length))}
           ${tile('チーム/コンサル明細',num(imp.team_lines))}
-        </div>
+</div>
         <div class="note" style="margin-top:1rem">消費税レコード（取引区分＝消費税）は集計対象外。未分類・スキップは<a onclick="openTab('imports')">データ取込画面</a>で明細確認できます。</div>
-      </div></div>
-    </div>
-    <div class="card"><div class="card-header"><h3 class="card-title">チーム別 比較（時間生産性の高い順）<span class="req-tag">OSA-07</span></h3></div>
+</div></div>
+</div>
+    <div class="card"><div class="card-header"><h3 class="card-title">チーム別 比較（時間生産性の高い順）</h3></div>
       <div class="table-wrapper"><table class="data-table"><thead><tr><th>チーム</th><th>上位組織</th><th class="num">人数</th><th class="num">報酬</th><th class="num">前月比</th><th class="num">直接時間</th><th class="num">時間生産性(直接)</th><th>全社平均との比較</th></tr></thead><tbody>
       ${teamRows.map(r=>{
         const d=r.prevFee?((r.fee-r.prevFee)/r.prevFee*100):null;
@@ -827,7 +827,7 @@ VIEWS.dashboard = ()=>{
         <span class="subtitle" style="font-size:.7rem">${rel?(rel>=100?'+':'')+(rel-100).toFixed(0)+'%':'-'}</span></td></tr>`;}).join('')}
       </tbody></table></div>
       <div class="card-body note">経験年数や関与先構成によりチーム間の差は生じます。<b>順位付けではなく、要員配置や育成の検討材料</b>としてご覧ください（若手の多いチームは低く出ます）。</div>
-    </div>
+</div>
     <div class="card"><div class="card-header"><h3 class="card-title">従業員別 報酬 上位（クリックで個人成績へ）</h3></div>
       <div class="table-wrapper"><table class="data-table"><thead><tr><th>担当者</th><th>所属</th><th class="num">報酬</th><th class="num">前月比</th><th class="num">直接時間</th><th class="num">時間生産性(直接)</th><th class="num">受託件数</th></tr></thead><tbody>
       ${top.map(e=>{ const pv=prevPeriod(PERIOD)?empOf(prevPeriod(PERIOD),e.name):null;
@@ -836,11 +836,11 @@ VIEWS.dashboard = ()=>{
         <td class="num">${d==null?'-':`<span class="${d>=0?'delta-up':'delta-down'}" style="padding:1px 5px;border-radius:3px;font-size:.72rem;font-weight:700">${d>=0?'+':''}${d.toFixed(1)}%</span>`}</td>
         <td class="num">${e.hours?num(e.hours.direct):'-'}</td><td class="num">${e.prodDir?yen(e.prodDir):'<span style="color:#adb5bd">日報未連携</span>'}</td><td class="num">${e.cases.total}</td></tr>`;}).join('')}
       </tbody></table></div>
-    </div>
-  </div>`;
+</div>
+</div>`;
 };
 
-/* ---------- 個人成績（OSA-01〜04・12の中心画面） ---------- */
+/* ---------- 個人成績（の中心画面） ---------- */
 VIEWS['my-performance'] = ()=>{
   const list=A().employees;
   if(!state.emp||!list.some(x=>x.name===state.emp)) state.emp = list[0].name;
@@ -851,7 +851,7 @@ VIEWS['my-performance'] = ()=>{
   const intent = intentOf(e.name,PERIOD);
   const ach = intent? e.total/intent*100 : null;
   const y = ytd(e.name,PERIOD);
-  /* OSA-31（1-1）：監査／コンサル／資産税／その他にグループ化して表示（タグ付き） */
+  /* ：監査／コンサル／資産税／その他にグループ化して表示（タグ付き） */
   const bcListAll = bcOf().filter(bc=>e.byBc[bc]&&bcVisibleFor(bc,e.name));
   const bcByGroup = {};
   bcListAll.forEach(bc=>{ const g=bcGroupOf(bc); (bcByGroup[g]=bcByGroup[g]||[]).push(bc); });
@@ -887,21 +887,21 @@ VIEWS['my-performance'] = ()=>{
 
   $view().innerHTML = `
   <div class="page-wrap">
-    <p class="subtitle">担当者の実績を<b>年間の流れ</b>で表示します。報酬は按分ルール適用後、生産性＝報酬÷直接労働時間。<span class="req-tag">OSA-01〜04・12</span></p>
+    <p class="subtitle">担当者の実績を<b>年間の流れ</b>で表示します。報酬は按分ルール適用後、生産性＝報酬÷直接労働時間。</p>
     <div class="toolbar">
       <label>担当者</label><select onchange="state.emp=this.value;render()" ${ROLE==='USER'?'disabled':''}>${opts}</select>
       <span class="pill status-neutral">${e.office}オフィス</span><span class="pill status-neutral">${esc(orgOf(e.name))}</span>
       <span style="flex:1"></span>
       <span class="subtitle">対象月：${pLabel(PERIOD)}${isClosed()?'／ <span class="status-badge status-warning">締め済み（閲覧のみ）</span>':''}</span>
-    </div>
+</div>
 
-    <!-- OSA-01：指標ごとの月次推移 -->
+    
     <div class="trend-grid">
       ${trendCard('報酬',seriesFor(e.name,x=>x.total),yenG,{target:intent,foot:'赤破線＝今月の意向額 '+yen(intent)+'千円'})}
       ${trendCard('直接労働時間',seriesFor(e.name,x=>x.hours?x.hours.direct:null),v=>num(v)+'h',{ref:avg?avg.direct:null})}
       ${trendCard('時間生産性(直接)',seriesFor(e.name,x=>x.prodDir),yenG,{ref:avg?avg.prodDir:null})}
       ${trendCard('受託件数',seriesFor(e.name,x=>x.cases.total),v=>num(v)+'件',{foot:'TKC_CDBの最新状態（月次の履歴なし）'})}
-    </div>
+</div>
     <div class="legend"><span><i style="background:var(--accent-color)"></i>本人</span><span><i style="background:#adb5bd"></i>事務所平均</span><span><i style="background:var(--danger-color)"></i>意向額</span><span>グラフの点にカーソルを合わせると月と数値が出ます</span></div>
 
     <div class="kpi-card-grid">
@@ -911,10 +911,10 @@ VIEWS['my-performance'] = ()=>{
       ${kpi('平均との差',prodRel==null?'-':(prodRel>=0?'+':'')+prodRel.toFixed(1)+'%',avg?`${e.office}オフィス ${avg.n}名の平均比`:'')}
       ${kpi('今月の達成率',ach==null?'-':pct1(ach),'対 意向額 '+yen(intent))}
       ${kpi('年度累計 達成率',y.rate==null?'-':pct1(y.rate),`累計 ${yen(y.actual)} / 意向 ${yen(y.intent)}`)}
-    </div>
+</div>
 
-    <!-- OSA-03：事務所平均との比較 -->
-    <div class="card"><div class="card-header"><h3 class="card-title">事務所平均との比較 ／ 自分の時間あたり単価<span class="req-tag">OSA-03</span></h3></div><div class="card-body">
+    
+    <div class="card"><div class="card-header"><h3 class="card-title">事務所平均との比較 ／ 自分の時間あたり単価</h3></div><div class="card-body">
       ${avg&&avg.prodDir?`
       <div class="hrow"><span class="k">自分の時間生産性（直接）</span><span class="v">${e.prodDir?yen(e.prodDir)+' / 時間':'日報未連携のため算出できません'}</span></div>
       <div class="hrow"><span class="k">${e.office}オフィス平均（${avg.n}名）</span><span class="v">${yen(Math.round(avg.prodDir))} / 時間</span></div>
@@ -926,15 +926,15 @@ VIEWS['my-performance'] = ()=>{
           <i style="width:${e.prodDir&&avg.prodDir?Math.min(100,e.prodDir/(avg.prodDir*2)*100):0}%"></i>
           <span class="cmp-mark avg" style="left:50%" title="事務所平均"></span>
           ${needRate?`<span class="cmp-mark" style="left:${Math.min(99,needRate/(avg.prodDir*2)*100)}%" title="必要時間単価"></span>`:''}
-        </div>
+</div>
         <div class="legend"><span><i style="background:var(--accent-color)"></i>自分</span><span><i style="background:#6c757d"></i>事務所平均</span><span><i style="background:var(--danger-color)"></i>意向額から逆算した必要単価</span></div>
-      </div>
+</div>
       <div class="note" style="margin-top:1rem"><b>この数字は順位付けではありません。</b>自分の1時間あたりの単価を知り、「お客様に最低いくら請求する必要があるか」を考えるための目安です。経験年数や担当する関与先の構成によって差が出るのは当然で、評価の材料ではなく振り返りのための指標です。</div>
       `:'<p class="subtitle">日報が連携されている担当者がいないため、平均を算出できません。</p>'}
-    </div></div>
+</div></div>
 
-    <!-- OSA-04：月次＋年度累計の達成率 -->
-    <div class="card"><div class="card-header"><h3 class="card-title">意向額に対する進捗（月次／年度累計）<span class="req-tag">OSA-04・OSA-14</span></h3></div><div class="card-body">
+    
+    <div class="card"><div class="card-header"><h3 class="card-title">意向額に対する進捗（月次／年度累計）</h3></div><div class="card-body">
       <div class="bar2">
         <div>
           <div class="section-title">${pLabel(PERIOD)} 単月</div>
@@ -943,7 +943,7 @@ VIEWS['my-performance'] = ()=>{
           <div class="hrow"><span class="k">差</span><span class="v">${yen(e.total-intent)}</span></div>
           <div class="hrow"><span class="k">達成率</span><span class="v">${pct1(ach)}</span></div>
           <div class="mp-progress"><div class="mp-progress-fill" style="width:${Math.min(100,ach||0)}%"></div></div>
-        </div>
+</div>
         <div>
           <div class="section-title">年度累計（${fyKeyOf(PERIOD)}年${FY_START}月期・取込済み${y.periods.length}ヶ月）</div>
           <div class="hrow"><span class="k">意向額 累計</span><span class="v">${yen(y.intent)}</span></div>
@@ -951,13 +951,13 @@ VIEWS['my-performance'] = ()=>{
           <div class="hrow"><span class="k">差</span><span class="v">${yen(y.actual-y.intent)}</span></div>
           <div class="hrow"><span class="k">年度累計 達成率</span><span class="v">${pct1(y.rate)}</span></div>
           <div class="mp-progress"><div class="mp-progress-fill" style="width:${Math.min(100,y.rate||0)}%"></div></div>
-        </div>
-      </div>
+</div>
+</div>
       <div class="note" style="margin-top:1rem">関与先の決算月が特定の月に偏るため、単月の達成率だけでは評価できません。<b>年度累計とあわせて</b>ご覧ください。意向額は「来期の意向入力」画面で上長と相談のうえ設定します。</div>
-    </div></div>
+</div></div>
 
     ${rmv.length||add.length||gne.length?`
-    <div class="card"><div class="card-header"><h3 class="card-title">担当関与先の変更（前月との差分）<span class="req-tag">OSA-13</span></h3></div><div class="card-body">
+    <div class="card"><div class="card-header"><h3 class="card-title">担当関与先の変更（前月との差分）</h3></div><div class="card-body">
       ${rmv.length?`<div class="note note-warn"><b>他の担当者へ移った関与先 ${rmv.length}件</b>（${pLabel(prevPeriod(PERIOD))}はあなた、${pLabel(PERIOD)}は別の担当者で請求）。当月の実績・件数はブランクになり、履歴は残ります。<br>
       ${rmv.map(c=>`<span class="pill status-warning" style="margin:.2rem">${esc(c.name)}（${esc(c.code)}／前月 ${yen(c.prevAmount)}${c.to.length?' → '+esc(c.to.join('・')):''}）</span>`).join('')}</div>`:''}
       ${add.length?`<div class="note" style="margin-top:.6rem"><b>今月から自分の担当になった関与先 ${add.length}件</b>。今月から集計に加わります。<br>
@@ -965,39 +965,39 @@ VIEWS['my-performance'] = ()=>{
       ${gne.length?`<details style="margin-top:.6rem"><summary style="cursor:pointer;font-size:.82rem;color:var(--accent-color)">当月の請求がなかった関与先 ${gne.length}件（年一関与など請求サイクルの可能性）</summary>
       <div style="padding:.5rem 0">${gne.map(c=>`<span class="pill status-neutral" style="margin:.2rem">${esc(c.name)}（${esc(c.code)}／前月 ${yen(c.prevAmount)}）</span>`).join('')}</div></details>`:''}
       <p class="subtitle" style="margin-top:.6rem">当月取込と前月取込を突合して自動検出しています。内容に心当たりがない場合は管理者へご連絡ください。</p>
-    </div></div>`:''}
+</div></div>`:''}
 
     <div class="bar2">
       <div class="card"><div class="card-header"><h3 class="card-title">日報労働時間 [kintone日報]</h3></div><div class="card-body">
         ${e.hours?`<div class="tiles">${tile('直接時間',num(e.hours.direct)+'h')}${tile('間接時間',num(e.hours.indirect)+'h')}${tile('合計時間',num(e.hours.total)+'h')}</div>
-        <p class="subtitle" style="margin-top:.75rem">間接：決裁業務／研修・会議／保険提案／委員会・PJ 等（業務日報間接時間マスタで判定）。ID紐づけ：<b>${e.empId}</b>。<span class="req-tag">OSA-26（1-6）</span></p>`
+        <p class="subtitle" style="margin-top:.75rem">間接：決裁業務／研修・会議／保険提案／委員会・PJ 等（業務日報間接時間マスタで判定）。ID紐づけ：<b>${e.empId}</b>。</p>`
         :`<div class="note note-warn">この担当者は日報kintone IDが担当者マスタに未連携です。</div>`}
-      </div></div>
-      <div class="card"><div class="card-header"><h3 class="card-title">受託件数（監査サイクル別）<span class="req-tag">OSA-28（1-5）</span></h3></div><div class="card-body">
+</div></div>
+      <div class="card"><div class="card-header"><h3 class="card-title">受託件数（監査サイクル別）</h3></div><div class="card-body">
         <div class="tiles">${tile('毎月',e.cases.monthly)}${tile('隔月',e.cases.bimonthly)}${tile('年一',e.cases.yearly)}${tile('合計',`<a class="clickable" onclick="drillCases('${esc(e.name)}')">${e.cases.total}</a>`)}</div>
         <p class="subtitle" style="margin-top:.75rem">「合計」をクリックすると担当関与先の一覧が出ます。<b>何が増えて何が減ったか</b>を月次で比較できます。TKC_CDB「巡回監査の実施」「監査回数_月」で毎月／隔月／年一を判定。事務所コード99999は件数から除外。</p>
-      </div></div>
-    </div>
+</div></div>
+</div>
 
-    <div class="card"><div class="card-header"><h3 class="card-title">業務分類別 内訳（前月比つき・金額クリックで元請求データ）<span class="req-tag">OSA-12</span></h3></div>
+    <div class="card"><div class="card-header"><h3 class="card-title">業務分類別 内訳（前月比つき・金額クリックで元請求データ）</h3></div>
       <div class="table-wrapper"><table class="data-table"><thead><tr><th>業務分類</th><th class="num">${pMonth(PERIOD)}月</th><th class="num">前月</th><th class="num">前月比</th><th class="num">構成比</th>${ROLE==='ADMIN'?'<th class="num">管理者修正（自動再集計）</th>':''}</tr></thead><tbody>${bcRows||'<tr><td colspan=6 style="text-align:center;color:var(--medium-gray)">データなし</td></tr>'}</tbody></table></div>
       ${hiddenBc.length?`<div class="card-body subtitle">業務分類マスタの「表示しない組織」設定により ${hiddenBc.map(esc).join('・')} を非表示（所属：${esc(orgOf(e.name))}）</div>`:''}
-    </div>
+</div>
 
     ${clientMatrix(e.name)}
 
-    <div class="card"><div class="card-header"><h3 class="card-title">提供サービス（手入力欄）＋ その他コンサル報酬 <span class="req-tag">担当者も入力可</span></h3></div><div class="card-body">
+    <div class="card"><div class="card-header"><h3 class="card-title">提供サービス（手入力欄）＋ その他コンサル報酬</h3></div><div class="card-body">
       <p class="subtitle">システムから取得できない実績を手入力（提供サービスマスタで項目追加可）。翌月へコピーされます。</p>
       <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-top:.5rem">
       ${svc.map(s=>{const key=e.name+'|'+PERIOD+'|'+s;const on=state.services[key];return `<label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem"><input type="checkbox" ${on?'checked':''} ${isClosed()&&ROLE==='USER'?'disabled':''} onchange="state.services['${esc(key)}']=this.checked">${s}</label>`}).join('')}
-      </div>
+</div>
       <div style="margin-top:1rem;max-width:320px"><label class="form-label">その他コンサル報酬（手入力）</label><input class="form-input" type="text" placeholder="¥ 0" ${isClosed()&&ROLE==='USER'?'disabled':''}></div>
       ${isClosed()&&ROLE==='USER'?'<div class="note note-warn" style="margin-top:.75rem">月次締め済みのため担当者は入力できません（閲覧のみ）。</div>':''}
-    </div></div>
-  </div>`;
+</div></div>
+</div>`;
 };
 
-/* ---------- OSA-02：関与先×月 の一覧（年間累計つき・行クリックで業務分類内訳） ---------- */
+/* ---------- ：関与先×月 の一覧（年間累計つき・行クリックで業務分類内訳） ---------- */
 function clientMatrix(empName){
   const fy=fyKeyOf(PERIOD);
   const empOffice=(ALL_EMPS.find(x=>x.name===empName)||{}).office||'A事務所';
@@ -1043,9 +1043,9 @@ function clientMatrix(empName){
       <td class="num"><b>${yenS(r.total)}</b></td>
       ${cols.map(c=>cell(r.byP[c.p],c,r.byP[c.p]?`event.stopPropagation();drillClientP('${esc(empName)}','${esc(r.code)}','${esc(r.name)}','${c.p}')`:null)).join('')}<td>${tkcDots(empOffice,r.code)}</td></tr>${detail}`;
   }).join('');
-  return `<div class="card"><div class="card-header"><h3 class="card-title">業務分類別（月別・年間累計）<span class="req-tag">OSA-02</span></h3><span class="record-count">${fy}年${FY_START}月期</span></div>
+  return `<div class="card"><div class="card-header"><h3 class="card-title">業務分類別（月別・年間累計）</h3><span class="record-count">${fy}年${FY_START}月期</span></div>
     <div class="scroll-x"><table class="data-table" style="min-width:900px"><thead>${head}</thead><tbody>${totalRow}${bcRows}</tbody></table></div></div>
-  <div class="card"><div class="card-header"><h3 class="card-title">関与先別 実績（月別・年間累計／行クリックで業務分類内訳・金額クリックで請求明細）<span class="req-tag">OSA-02</span></h3><span class="record-count">${rows.length}社</span></div>
+  <div class="card"><div class="card-header"><h3 class="card-title">関与先別 実績（月別・年間累計／行クリックで業務分類内訳・金額クリックで請求明細）</h3><span class="record-count">${rows.length}社</span></div>
     <div class="scroll-x"><table class="data-table" style="min-width:980px"><thead>${headC}</thead><tbody>${clientRows||'<tr><td colspan=15 style="text-align:center;color:var(--medium-gray)">データなし</td></tr>'}</tbody></table></div>
     <div class="card-body note">列は上の業務分類サマリと同じ並び（${FY_START}月〜${FY_MONTHS[11]}月）です。「·」は未取込の月。<b>実際に見比べるのは前月と当月</b>ですが、年間の並びは定期的な見直しのために保持しています。金額クリックで元の請求明細までドリルダウンできます。右端はTKCマスタ②による活用状況（●＝導入済み／赤＝導入1件以下の提案チャンス）で、クリックするとTKC活用状況画面が開きます。</div></div>`;
 }
@@ -1090,17 +1090,17 @@ VIEWS.employees = ()=>{
   const teamCnt=A().employees.filter(e=>teamOnlyOrgs.includes(orgOf(e.name))).length;
   $view().innerHTML = `
   <div class="page-wrap">
-    <p class="subtitle">担当者×業務分類の集計（${pLabel(PERIOD)}）。<b>組織マスタの階層（親組織）に従って集計単位を切り替え</b>られます。<span class="req-tag">OSA-07</span></p>
+    <p class="subtitle">担当者×業務分類の集計（${pLabel(PERIOD)}）。<b>組織マスタの階層（親組織）に従って集計単位を切り替え</b>られます。</p>
     <div class="toolbar"><label>集計単位</label>
       <select class="form-select" style="max-width:240px" onchange="state.empScope=this.value;render()">
         ${scopes.map(x=>`<option value="${esc(x)}" ${scope===x?'selected':''}>${x==='all'?'全社':esc(x)}</option>`).join('')}
       </select>
       <span class="record-count">${emps.length} 名</span><span style="flex:1"></span>
       <span class="subtitle">${hiddenCnt?`非表示組織で除外 ${hiddenCnt}名／`:''}チーム単位管理で除外 ${teamCnt}名</span>
-    </div>
+</div>
     <div class="card"><div class="scroll-x"><table class="data-table"><thead><tr>${head.map((h,i)=>`<th class="${i>1?'num':''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${totalRow}${rows||'<tr><td colspan=3 style="text-align:center;color:var(--medium-gray)">該当者なし</td></tr>'}</tbody></table></div></div>
-    <div class="note">システムレンタル料などシスサポ分類の報酬は<b>個人には帰属させず</b><a class="clickable" onclick="openTab('team')">システムサポートチーム</a>へ集約しています<span class="req-tag">OSA-05</span>。コンサル報酬は個人に帰属します<span class="req-tag">OSA-06</span>。</div>
-  </div>`;
+    <div class="note">システムレンタル料などシスサポ分類の報酬は<b>個人には帰属させず</b><a class="clickable" onclick="openTab('team')">システムサポートチーム</a>へ集約しています。コンサル報酬は個人に帰属します。</div>
+</div>`;
 };
 
 /* ---------- 受託件数 ---------- */
@@ -1116,7 +1116,7 @@ VIEWS.cases = ()=>{
     ${emps.map(e=>`<tr><td>${esc(e.name)}</td><td>${e.office}</td><td class="num">${e.cases.monthly}</td><td class="num">${e.cases.bimonthly}</td><td class="num">${e.cases.yearly}</td><td class="num"><a class="clickable" onclick="drillCases('${esc(e.name)}')"><b>${e.cases.total}</b></a></td></tr>`).join('')}
     </tbody></table></div></div>
     <div class="note-warn note">判定ロジック：「毎月」→毎月／「不定期」かつ「監査回数＿月」が1でも空白でもない→隔月／上記以外→年一。事務所コード99999は件数集計から除外。</div>
-  </div>`;
+</div>`;
 };
 
 /* ---------- TKC活用状況（TKCマスタ②の実データ） ---------- */
@@ -1151,17 +1151,17 @@ VIEWS.tkc = ()=>{
   $view().innerHTML=`<div class="page-wrap">
     <p class="subtitle">TKCマスタ②（所内管理情報）の<b>実データ</b>による関与先ごとの活用状況。個人成績の関与先一覧からも参照できます。</p>
     <div class="note">TKC利用サービスは<b>最新状態のみで月の概念がありません</b>。最新スナップショット（202609時点・${num(rows.length)}関与先）として保持しています。</div>
-    <div class="card"><div class="card-header"><h3 class="card-title">サービス別 導入件数<span class="req-tag">OSA-27（1-4）</span></h3></div><div class="card-body">
-      <p class="subtitle" style="margin:0 0 .6rem">議事録9/25確定：率の表示は削除（個人の値ではなく全社の母数で誤解を招くため）。件数と関与先一覧で確認します。</p>
+    <div class="card"><div class="card-header"><h3 class="card-title">サービス別 導入件数</h3></div><div class="card-body">
+      <p class="subtitle" style="margin:0 0 .6rem">率の表示は削除（個人の値ではなく全社の母数で誤解を招くため）。件数と関与先一覧で確認します。</p>
       ${rate.map(r=>`<div class="hrow"><span class="k">${esc(r.s)}</span><span class="v">${num(r.n)}件<span class="subtitle" style="margin-left:.6rem;font-size:.72rem">／ 全${num(rows.length)}関与先</span></span></div>`).join('')}
-    </div></div>
+</div></div>
     <div class="toolbar"><label>担当者</label><select onchange="state.tkcEmp=this.value;render()"><option value="">全担当者</option>${emps.map(e=>`<option ${e===f?'selected':''}>${esc(e)}</option>`).join('')}</select>
       <span style="flex:1"></span><span class="record-count">提案チャンス（導入1件以下）：${num(chance.length)}件</span></div>
     <div class="card"><div class="card-header"><h3 class="card-title">関与先×サービス マトリクス（導入数の少ない順・上位400件）</h3></div><div class="scroll-x"><table class="data-table"><thead><tr><th>関与先</th><th>担当者</th><th>決算月</th>${TKC_SVC.map(s=>`<th style="text-align:center">${esc(s)}</th>`).join('')}<th class="num">導入数</th></tr></thead><tbody>
     ${shown.map(r=>`<tr ${r.count<=1?'style="background:#fdeef0"':''}><td>${esc(r.name)}</td><td>${esc(r.emp)||'-'}</td><td class="subtitle">${esc(r.kessan)}</td>${r.svc.map(v=>`<td style="text-align:center;font-weight:700;color:${v?'var(--success-color)':'#ced4da'}">${v?'✔':'−'}</td>`).join('')}<td class="num">${r.count}/${TKC_SVC.length}</td></tr>`).join('')}
     </tbody></table></div></div>
     <div class="note">ピンク行＝導入1件以下の提案チャンス。</div>
-  </div>`;
+</div>`;
 };
 
 /* ---------- kintone日報連携 ---------- */
@@ -1191,7 +1191,7 @@ VIEWS.nippo = ()=>{
       ${trendCard('直接労働時間（全社）',trendD,v=>num(Math.round(v))+'h')}
       ${trendCard('間接労働時間（全社）',PERIODS.map(p=>({p:p,v:nippoStats(MD(p).nippo||[]).indirect})),v=>num(Math.round(v))+'h')}
       ${trendCard('直接時間比率',PERIODS.map(p=>{const s=nippoStats(MD(p).nippo||[]);return {p:p,v:s.total?s.direct/s.total*100:null}}),v=>v.toFixed(1)+'%')}
-    </div>
+</div>
     <div class="card"><div class="card-header"><h3 class="card-title">連携フロー</h3></div><div class="card-body">
       <div class="steps">
         <div class="step done"><span class="n">1</span><h4>担当者が入力</h4><p>kintone 業務日報アプリに日次入力。<br><b>${num(regs.length)}名</b>が入力済み。</p></div>
@@ -1201,44 +1201,44 @@ VIEWS.nippo = ()=>{
         <div class="step done"><span class="n">3</span><h4>本システムへ取込</h4><p>担当者マスタでkintone IDとCDB担当者コードを突合。間接時間マスタで直接/間接を判定。</p></div>
         <div class="arrow">→</div>
         <div class="step done"><span class="n">4</span><h4>集計へ反映</h4><p>個人成績の労働時間・時間生産性（報酬÷直接時間）へ自動反映。</p></div>
-      </div>
+</div>
       <div class="toolbar" style="margin-top:1rem">
         <button class="btn btn-primary btn-sm" onclick="alert('${pLabel(PERIOD)}の日報 ${num(st.n)}件を取り込みました（同月再取込は上書き）。')">日報を取り込む（API実行）</button>
         <span class="subtitle">連携頻度：請求データ確定後の月1回（リアルタイム連携は不要）</span>
-      </div>
-    </div>
+</div>
+</div>
     <div class="kpi-card-grid">
       ${kpi('取込件数',num(st.n)+'件',pLabel(PERIOD)+' 日報レコード')}
       ${kpi('直接労働時間',num(Math.round(st.direct))+'h','関与先業務')}
       ${kpi('間接労働時間',num(Math.round(st.indirect))+'h','間接時間マスタで判定')}
       ${kpi('合計労働時間',num(Math.round(st.total))+'h','全社')}
-    </div>
+</div>
     <div class="card"><div class="card-header"><h3 class="card-title">取込チェック</h3></div><div class="card-body">
       <div class="hrow"><span class="k">全時間の取込漏れ</span><span class="v"><span class="status-badge status-valid">OK</span> ${num(st.n)}件すべて取込（合計${num(Math.round(st.total))}h）</span></div>
       <div class="hrow"><span class="k">担当者マスタと紐づいたkintone ID</span><span class="v">${linked.filter(x=>regs.includes(x)).length} / ${regs.length} 名</span></div>
       <div class="hrow"><span class="k">紐づけ不可のkintone ID</span><span class="v"><span class="status-badge ${unlinked.length?'status-warning':'status-valid'}">${unlinked.length?'要登録 '+unlinked.length+'件':'OK'}</span></span></div>
       ${unlinked.length?`<div class="note note-warn" style="margin-top:.75rem">以下のkintone IDが担当者マスタに未登録のため、個人成績の時間生産性が算出できません（請求実績を持たない部門の担当者を含みます）：<br><span style="font-family:monospace;font-size:.78rem">${unlinked.map(esc).join(' / ')}</span></div>`:''}
-    </div></div>
+</div></div>
     <div class="toolbar">
       <label>担当者</label><select onchange="state.nf.reg=this.value;render()"><option value="">全担当者</option>${regs.map(r=>`<option value="${esc(r)}" ${f.reg===r?'selected':''}>${esc(nippoName(r))}${DATA.id2name&&DATA.id2name[r]?'':'（未連携）'}</option>`).join('')}</select>
       <label>種別</label><select onchange="state.nf.kind=this.value;render()"><option value="">すべて</option><option value="d" ${f.kind==='d'?'selected':''}>直接業務のみ</option><option value="i" ${f.kind==='i'?'selected':''}>間接業務のみ</option></select>
       <label>検索</label><input value="${esc(f.q)}" placeholder="関与先/担当者" oninput="state.nf.q=this.value;render()">
       <span style="flex:1"></span><span class="record-count">${num(fs.n)}件 ／ 直接${num(Math.round(fs.direct))}h・間接${num(Math.round(fs.indirect))}h</span>
-    </div>
+</div>
     <div class="card"><div class="card-header"><h3 class="card-title">kintone日報データ（${pLabel(PERIOD)}・実データ）</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>日付</th><th>担当者</th><th>種別</th><th>関与先</th><th>コード</th><th>業務分類</th><th class="num">作業時間</th></tr></thead><tbody>
     ${show.map(r=>`<tr><td>${esc(r[1])}</td><td>${esc(nippoName(r[0]))}</td><td>${r[6]?'<span class="status-badge status-valid">直接</span>':'<span class="status-badge status-warning">間接</span>'}</td><td>${esc(r[2])||'−'}</td><td>${esc(r[3])||'−'}</td><td>${esc(r[4])}</td><td class="num">${r[5].toFixed(1)}h</td></tr>`).join('')}
     </tbody></table></div>${list.length>200?`<div class="card-body subtitle">上位200件を表示（全${num(list.length)}件）</div>`:''}</div>
-  </div>`;
+</div>`;
 };
 
-/* ---------- 担当変更の検出（OSA-13・管理者） ---------- */
+/* ---------- 担当変更の検出（・管理者） ---------- */
 VIEWS.reassign = ()=>{
   if(ROLE!=='ADMIN'){ $view().innerHTML=`<div class="page-wrap"><div class="note note-warn">この画面は<b>管理者のみ</b>です。ご自身の担当変更は「個人成績」「月次確認（担当者）」でご確認ください。</div></div>`; return; }
   const ra=reassignments(PERIOD);
   if(!ra){ $view().innerHTML=`<div class="page-wrap"><div class="note">${pLabel(PERIOD)}は取込済みの最初の月のため、前月との比較ができません。対象月を切り替えてください。</div></div>`; return; }
   const empsAffected=[...new Set([...Object.keys(ra.moved),...Object.keys(ra.added)])];
   $view().innerHTML=`<div class="page-wrap">
-    <p class="subtitle">${pLabel(ra.prev)}の取込と${pLabel(PERIOD)}の取込を突合し、<b>関与先の担当者変更を自動検出</b>します。突合されない担当替えは実績の付け替え漏れにつながるため、担当者本人の確認画面にも表示します。<span class="req-tag">OSA-13</span></p>
+    <p class="subtitle">${pLabel(ra.prev)}の取込と${pLabel(PERIOD)}の取込を突合し、<b>関与先の担当者変更を自動検出</b>します。突合されない担当替えは実績の付け替え漏れにつながるため、担当者本人の確認画面にも表示します。</p>
     <div class="note">判定の区分：<b>移管</b>＝前月・当月とも請求があり担当者が入れ替わった（真の担当変更）／<b>新規</b>＝当月から請求が発生／<b>当月請求なし</b>＝前月にあり当月に請求がない（年一関与など請求サイクルの可能性があるため、担当変更とは別に表示）。<br>
     <span class="subtitle">※ 本来はTKC_CDBの担当者を月次スナップショットで差分比較します。現在TKC_CDBは最新1本のみのご提供のため、FMS請求実績の担当者で代替しています。月次スナップショットをいただければ精度が上がります。</span></div>
     <div class="kpi-card-grid">
@@ -1246,8 +1246,8 @@ VIEWS.reassign = ()=>{
       ${kpi('新規に担当',num(ra.nNew)+'件','後任者は当月から集計')}
       ${kpi('当月請求なし',num(ra.nGone)+'件','請求サイクルの可能性・要確認')}
       ${kpi('対象担当者',num(empsAffected.length)+'名','本人画面に通知')}
-    </div>
-    <div class="card"><div class="card-header"><h3 class="card-title">検出一覧<span class="req-tag">OSA-32（2-4）</span></h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>区分</th><th>ｵﾌｨｽ</th><th>関与先CD</th><th>関与先</th><th>前月の担当</th><th>当月の担当</th><th class="num">前月実績</th><th>要確認の理由</th></tr></thead><tbody>
+</div>
+    <div class="card"><div class="card-header"><h3 class="card-title">検出一覧</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>区分</th><th>ｵﾌｨｽ</th><th>関与先CD</th><th>関与先</th><th>前月の担当</th><th>当月の担当</th><th class="num">前月実績</th><th>要確認の理由</th></tr></thead><tbody>
     ${ra.rows.map(r=>{
       const key=r.office+'|'+r.code+'|'+r.from;
       const reason=state.reassignReason[key]||'';
@@ -1265,9 +1265,9 @@ VIEWS.reassign = ()=>{
       ${(ra.moved[e]||[]).length?`<span class="status-badge status-warning">移管 ${ra.moved[e].length}件</span> `:''}
       ${(ra.added[e]||[]).length?`<span class="status-badge status-valid">新規 ${ra.added[e].length}件</span> `:''}
       <a class="clickable" onclick="openTab('staff-close',{closeEmp:'${esc(e)}'})">確認画面を開く</a></span></div>`).join('')||'<p class="subtitle">対象者なし</p>'}
-    </div></div>
+</div></div>
     <div class="note">仕様：担当者が入れ替わった関与先 → 前任者に<b>無効フラグ</b>を立て、当月の報酬・件数はブランク（履歴は保持）。後任者は<b>当月から</b>計上。10月の年次更新で無効フラグの関与先は翌期の画面から消えます。</div>
-  </div>`;
+</div>`;
 };
 
 /* ---------- 月次確認（担当者） ---------- */
@@ -1297,18 +1297,18 @@ VIEWS['staff-close'] = ()=>{
       <label>担当者</label>${ROLE==='ADMIN'?`<select onchange="state.closeEmp=this.value;render()">${opts}</select>`:`<span class="pill status-neutral">${esc(emp)}（ログイン中）</span>`}
       <span class="pill status-neutral">${e.office}オフィス</span><span style="flex:1"></span>
       <span class="subtitle">対象：${pLabel(PERIOD)}</span>
-    </div>
-    ${rmv.length||add.length||gne.length?`<div class="card"><div class="card-header"><h3 class="card-title">担当の変更（前月比）— 必ずご確認ください<span class="req-tag">OSA-13</span></h3></div><div class="card-body">
+</div>
+    ${rmv.length||add.length||gne.length?`<div class="card"><div class="card-header"><h3 class="card-title">担当の変更（前月比）— 必ずご確認ください</h3></div><div class="card-body">
       ${rmv.length?`<div class="note note-warn"><b>他の担当者へ移った関与先 ${rmv.length}件</b>：${rmv.map(c=>esc(c.name)+'（'+esc(c.code)+'）'+(c.to.length?' → '+esc(c.to.join('・')):'')).join(' ／ ')}<br>当月の実績・件数はブランクになります。心当たりがない場合は管理者へご連絡ください。</div>`:''}
       ${add.length?`<div class="note" style="margin-top:.6rem"><b>今月からあなたの担当になった関与先 ${add.length}件</b>：${add.map(c=>esc(c.name)+'（'+esc(c.code)+'）'+(c.from.length?'（前任：'+esc(c.from.join('・'))+'）':'')).join(' ／ ')}</div>`:''}
       ${gne.length?`<div class="note" style="margin-top:.6rem"><b>当月の請求がなかった関与先 ${gne.length}件</b>（年一関与など請求サイクルの可能性があります）：${gne.slice(0,20).map(c=>esc(c.name)+'（'+esc(c.code)+'）').join(' ／ ')}${gne.length>20?' …他'+(gne.length-20)+'件':''}</div>`:''}
-    </div></div>`:''}
+</div></div>`:''}
     <div class="kpi-card-grid">
       ${kpi('自分の報酬合計',yen(e.total),'按分適用後')}
       ${kpi('担当関与先',num(st.total)+'件','確認対象')}
       ${kpi('確認済み',num(st.done)+' / '+num(st.total),pct+'% 完了')}
       ${kpi('日報時間',hoursTxt,e.hours?'kintone日報より':'担当者マスタで要連携')}
-    </div>
+</div>
     <div class="card"><div class="card-header"><h3 class="card-title">確認の進捗</h3></div><div class="card-body">
       <div class="hrow"><span class="k">進捗</span><span class="v"><span class="prog" style="display:inline-block;width:200px;vertical-align:middle;margin-right:.6rem"><i style="width:${pct}%"></i></span>${pct}%</span></div>
       <div class="hrow"><span class="k">提出状況</span><span class="v">${submitted?'<span class="status-badge status-valid">月次確認 提出済み</span>':'<span class="status-badge status-warning">未提出</span>'}</span></div>
@@ -1316,9 +1316,9 @@ VIEWS['staff-close'] = ()=>{
         <button class="btn btn-outline btn-sm" onclick="confirmAll('${esc(emp)}')">すべて確認済みにする</button>
         <button class="btn btn-primary" ${st.done<st.total||submitted?'disabled':''} onclick="submitClose('${esc(emp)}')">月次確認を完了して提出</button>
         ${submitted?`<button class="btn btn-outline btn-sm" onclick="state.submitted['${esc(emp)}|${PERIOD}']=false;render()">提出を取消</button>`:''}
-      </div>
+</div>
       ${st.done<st.total?`<p class="subtitle" style="margin-top:.5rem">未確認が ${st.total-st.done} 件あります。</p>`:''}
-    </div></div>
+</div></div>
     <div class="card"><div class="card-header"><h3 class="card-title">自分の担当関与先（金額クリックで請求明細）</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>関与先コード</th><th>関与先名</th><th class="num">報酬</th><th class="num">前月</th><th>主な業務分類</th><th class="num">日報時間</th><th style="text-align:center">確認✔</th></tr></thead><tbody>
     ${e.clients.map(c=>{
       const key=empRowKey(emp,c.code); const on=!!state.rowConfirm[key];
@@ -1334,12 +1334,12 @@ VIEWS['staff-close'] = ()=>{
     ${rmv.map(c=>`<tr style="background:#fdeef0;color:var(--medium-gray)"><td>${esc(c.code)}</td><td>${esc(c.name)} <span class="status-badge status-warning">移管（担当外）</span></td><td class="num">—</td><td class="num subtitle">${yen(c.prevAmount)}</td><td class="subtitle">前月まで担当</td><td class="num">−</td><td style="text-align:center">−</td></tr>`).join('')}
     </tbody></table></div></div>
     ${isClosed()?'<div class="note note-warn">月次締め済みのため、担当者は修正できません（閲覧のみ）。</div>':''}
-  </div>`;
+</div>`;
 };
 window.confirmAll=(emp)=>{ const e=empOf(PERIOD,emp); if(!e)return; e.clients.forEach(c=>{state.rowConfirm[empRowKey(emp,c.code)]=true}); render(); };
 window.submitClose=(emp)=>{ state.submitted[emp+'|'+PERIOD]=true; alert(emp+' さんの'+pLabel(PERIOD)+' 月次確認を提出しました。'); render(); };
 
-/* ---------- チーム集計（OSA-05/06） ---------- */
+/* ---------- チーム集計（/06） ---------- */
 VIEWS.team = ()=>{
   const which = state.teamTab||'資産税チーム';
   const md=MD(PERIOD);
@@ -1349,30 +1349,30 @@ VIEWS.team = ()=>{
     note='資産税の請求は担当者ではなくチームで管理します（kintone資産税請求アプリ）。個人へは帰属させません。';
   }else if(which==='システムサポートチーム'){
     rows=A().sysLines.map(l=>({date:l.date,who:l.emp,client:l.client,bc:effBc(l),amount:l.amount,memo:l.detail,src:'FMS請求実績('+l.office+')'}));
-    note='<b>OSA-05</b>：システムレンタル料等は「その人の仕事で稼いだ報酬ではない」ため、個人の報酬・時間生産性から外し、システムサポートチームへ集約しました。上の「対象の業務分類」が対象範囲です。';
+    note='システムレンタル料等は「その人の仕事で稼いだ報酬ではない」ため、個人の報酬・時間生産性から外し、システムサポートチームへ集約しました。上の「対象の業務分類」が対象範囲です。';
     const cm={}; A().sysLines.forEach(l=>{ const k=l.office+'|'+l.code+'|'+l.detail; if(!cm[k]) cm[k]={office:l.office,code:l.code,detail:l.detail,bc:effBc(l),amount:0,n:0}; cm[k].amount+=l.amount; cm[k].n++; });
     codes=Object.values(cm).sort((a,b)=>b.amount-a.amount);
   }else{
     rows=md.consulLines.map(t=>({date:t.date,who:t.emp,client:t.client,bc:t.bc,amount:t.amount,memo:t.memo,src:t.src}));
-    note='<b>OSA-06</b>：コンサル報酬は担当が明確なため、チーム集計ではなく<b>個人の実績</b>として集計しています（この画面は内訳の確認用です）。';
+    note='コンサル報酬は担当が明確なため、チーム集計ではなく<b>個人の実績</b>として集計しています（この画面は内訳の確認用です）。';
   }
   const total=rows.reduce((s,r)=>s+r.amount,0);
   const byBc={}; rows.forEach(r=>{byBc[r.bc]=(byBc[r.bc]||0)+r.amount});
   const seg=['資産税チーム','システムサポートチーム','コンサル'];
   const trend=PERIODS.map(p=>({p:p,v: which==='資産税チーム'?agg(p).totals.teamShisan : which==='システムサポートチーム'?agg(p).totals.teamSys : agg(p).totals.consul}));
   $view().innerHTML=`<div class="page-wrap">
-    <p class="subtitle">チーム単位で管理する請求の集計画面。<span class="req-tag">OSA-05・OSA-06</span></p>
+    <p class="subtitle">チーム単位で管理する請求の集計画面。</p>
     <div class="toolbar"><label>チーム</label><span class="seg">${seg.map(s=>`<button class="${which===s?'on':''}" onclick="state.teamTab='${s}';render()">${s}</button>`).join('')}</span>
       <span style="flex:1"></span><span class="record-count">${num(rows.length)}明細 ／ 合計 ${yen(total)}</span></div>
     <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
       ${trendCard(which+' 請求額の推移',trend,yenG)}
       <div class="trend-card"><div class="trend-head"><span class="trend-title">業務分類別（${pLabel(PERIOD)}）</span></div>
         ${Object.entries(byBc).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>`<div class="hrow" style="padding:.3rem 0"><span class="k">${esc(k)}</span><span class="v" style="font-size:.9rem">${yen(v)}</span></div>`).join('')||'<p class="subtitle">データなし</p>'}
-      </div>
-    </div>
+</div>
+</div>
     <div class="note">${note}</div>
     ${which==='システムサポートチーム'?`
-    <div class="card"><div class="card-header"><h3 class="card-title">対象の報酬細目コード（要 確認事項）<span class="req-tag">OSA-05</span></h3><span class="record-count">${codes.length}コード</span></div>
+    <div class="card"><div class="card-header"><h3 class="card-title">対象の報酬細目コード</h3><span class="record-count">${codes.length}コード</span></div>
       <div class="note" style="margin:1rem 1.25rem 0">どの報酬細目コードをシスサポチームへ移すかは<b>請求分類マスタで定義が必要</b>です。現在は下記の業務分類（${M.sysBc.map(esc).join('・')}）に該当するコードを対象としています。<b>この一覧をご確認のうえ確定してください。</b>
       <span style="display:block;margin-top:.5rem"><a class="clickable" onclick="openTab('m-billing')">請求分類マスタで対象を変更する</a></span></div>
       <div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>細目CD</th><th>報酬細目</th><th>業務分類</th><th class="num">明細</th><th class="num">${pMonth(PERIOD)}月 金額</th></tr></thead><tbody>
@@ -1381,10 +1381,10 @@ VIEWS.team = ()=>{
     <div class="card"><div class="card-header"><h3 class="card-title">明細（${pLabel(PERIOD)}・実データ）</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>日付</th><th>担当</th><th>請求先</th><th>業務分類</th><th class="num">金額</th><th>摘要／ソース</th></tr></thead><tbody>
     ${rows.slice(0,150).map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.who)}</td><td>${esc(r.client)}</td><td>${esc(r.bc)}</td><td class="num">${yen(r.amount)}</td><td class="subtitle">${esc(r.memo)}<br><span style="font-size:.7rem">${esc(r.src)}</span></td></tr>`).join('')}
     </tbody></table></div>${rows.length>150?`<div class="card-body subtitle">上位150件を表示（全${num(rows.length)}件）</div>`:''}</div>
-  </div>`;
+</div>`;
 };
 
-/* ---------- データ取込（OSA-15/16） ---------- */
+/* ---------- データ取込（/16） ---------- */
 window.runImport=()=>{
   const un=MD(PERIOD).lines.filter(l=>effBc(l)==='未分類');
   if(un.length){
@@ -1414,32 +1414,32 @@ VIEWS.imports = ()=>{
     <div class="toolbar"><label>取込月</label><select onchange="setPeriod(this.value)">${PERIODS.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${p}</option>`).join('')}</select>
       <button class="btn btn-primary btn-sm" onclick="runImport()">取込実行（上書き）</button>
       <span class="subtitle">同月再取込は自動上書き（重複チェック）／連携頻度は請求確定後の月1回</span>
-    </div>
+</div>
     <div class="kpi-card-grid">
       ${kpi('取込対象 総行数',num(imp.officeA_total+imp.officeB_total),'A事務所+B事務所 生データ')}
       ${kpi('消費税レコード除外',num(imp.officeA_tax_excluded+imp.officeB_tax_excluded),'取込対象外')}
       ${kpi('スキップ行',num(imp.skipped.length),'関与先/担当者 空白')}
       ${kpi('未分類 警告',num(imp.unmatched.length),'業務分類できず')}
-    </div>
+</div>
     <div class="bar2">
       <div class="card"><div class="card-header"><h3 class="card-title">金額突合（元データ合計 vs 集計結果）</h3></div>
         <div class="table-wrapper"><table class="data-table"><thead><tr><th>データソース</th><th class="num">生行数</th><th class="num">消費税除外</th><th class="num">取込明細</th><th class="num">請求額合計</th><th>突合</th></tr></thead><tbody>${srcRows}
         <tr style="background:#f8f9fa;font-weight:600"><td>合計</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">${yen(T.all)}</td><td><span class="status-badge status-valid">全件一致</span></td></tr>
         </tbody></table></div>
-      </div>
+</div>
       ${trendCard('未分類レコード件数の推移',unmatchedTrend,v=>num(v)+'件',{foot:'マスタ登録が進めば0に近づきます'})}
-    </div>
-    <div class="card"><div class="card-header"><h3 class="card-title">業務分類できなかった請求レコード（要確認）<span class="req-tag">OSA-16</span></h3><span class="record-count">${imp.unmatched.length}件</span></div>
+</div>
+    <div class="card"><div class="card-header"><h3 class="card-title">業務分類できなかった請求レコード（要確認）</h3><span class="record-count">${imp.unmatched.length}件</span></div>
       <div class="table-wrapper"><table class="data-table"><thead><tr><th>ソース</th><th>伝票</th><th>関与先</th><th>細目CD</th><th>報酬細目</th><th>対応</th></tr></thead><tbody>
       ${imp.unmatched.map(u=>`<tr><td>${esc(u.src)}</td><td>${esc(u.voucher)}</td><td>${esc(u.client)}</td><td>${esc(u.code)}</td><td>${esc(u.detail)}</td><td><span class="status-badge status-warning">要マスタ登録</span></td></tr>`).join('')||'<tr><td colspan=6 style="text-align:center">なし</td></tr>'}
       </tbody></table></div>
       <div class="card-body note note-warn">残っている未分類は、報酬細目コード <b>611（記帳代行）・612（入力代行）・613（給与代行）・996（値引き:月次/決算料）</b> など、請求分類マスタに未登録のコードです。<b>OSAのどの業務分類に割り当てるかをご確認のうえ登録</b>してください。運用2〜3ヶ月でこの種の警告は解消していきます。</div>
-    </div>
+</div>
     <div class="card"><div class="card-header"><h3 class="card-title">スキップ一覧（関与先名 or 担当者が空白）</h3><span class="record-count">${imp.skipped.length}件</span></div>
       <div class="card-body">${imp.skipped.length? '<div class="table-wrapper"><table class="data-table"><thead><tr><th>ソース</th><th>伝票</th><th>関与先</th><th>担当者</th><th>理由</th></tr></thead><tbody>'+imp.skipped.map(s=>`<tr><td>${esc(s.src)}</td><td>${esc(s.voucher)}</td><td>${esc(s.client)}</td><td>${esc(s.emp)}</td><td>${esc(s.reason)}</td></tr>`).join('')+'</tbody></table></div>' : '<p class="subtitle">この月はスキップ対象行はありませんでした（全行に関与先名・担当者あり）。</p>'}</div>
-    </div>
-    <div class="note">連携方式（確定）：FMS請求実績はAPIがないためCSV手動エクスポート＋取込。kintoneはAPI連携（日報／コンサル請求2アプリ／資産税請求）。<b>和暦（令和8年＝2026年）は取込時に西暦へ正規化</b>しています<span class="req-tag">OSA-08</span>。</div>
-  </div>`;
+</div>
+    <div class="note">連携方式（確定）：FMS請求実績はAPIがないためCSV手動エクスポート＋取込。kintoneはAPI連携（日報／コンサル請求2アプリ／資産税請求）。<b>和暦（令和8年＝2026年）は取込時に西暦へ正規化</b>しています。</div>
+</div>`;
 };
 
 function adminGuard(name){
@@ -1461,7 +1461,7 @@ VIEWS.masters = ()=>{
      stat:`${M.orgs.length}組織`, sub:`非表示 ${M.orgs.filter(o=>o.hidden).length}組織 ／ 集計単位に連動`, warn:0},
     {p:'m-bc',t:'業務分類マスタ',d:'集計軸となる業務分類と表示順、分類ごとの「表示しない組織」',
      stat:`${bcOf().length}分類`, sub:`組織別非表示 ${Object.values(M.bcHide).filter(a=>a&&a.length).length}分類`, warn:0},
-    {p:'m-billing',t:'請求分類マスタ',d:'報酬細目コード→業務分類の紐づけ／シスサポ帰属の指定（OSA-05）',
+    {p:'m-billing',t:'請求分類マスタ',d:'報酬細目コード→業務分類の紐づけ／シスサポ帰属の指定（）',
      stat:`${codes.size}コード`, sub: unclassified.length?`未分類 ${unclassified.length}明細（${yen(unclassified.reduce((a,l)=>a+l.amount,0))}）`:'未分類なし', warn:unclassified.length},
     {p:'m-alloc',t:'按分マスタ',d:'関与先×業務分類の担当者按分（最大4名・合計100%・適用期間）',
      stat:`${M.alloc.length}行`, sub: badAlloc?`合計100%でない行 ${badAlloc}件`:'すべて100%（集計へ適用中）', warn:badAlloc},
@@ -1486,7 +1486,7 @@ VIEWS.masters = ()=>{
     ${ROLE==='ADMIN'&&todo.length?`<div class="note note-warn"><b>要対応が ${todo.length}件</b>あります：${todo.map(i=>esc(i.t)+'（'+esc(i.sub)+'）').join('／')}</div>`:''}
     ${ROLE!=='ADMIN'?'<div class="note">マスタの参照・編集は管理者のみです。</div>':''}
     <div class="hub-grid">${cards}</div>
-  </div>`;
+</div>`;
 };
 
 VIEWS['m-bc'] = ()=>{
@@ -1507,7 +1507,7 @@ VIEWS['m-bc'] = ()=>{
       <td><button class="btn btn-outline btn-sm" onclick="removeBc(${i})" ${used?'disabled title="この分類の請求実績があるため削除できません"':''}>削除</button></td>
     </tr>`;
   }).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">集計画面の軸となる業務分類（表示順）。<b>変更した瞬間に全画面の集計へ反映</b>します。分類名の変更・順序入れ替え・追加・削除すべて可能。<span class="req-tag">OSA-29・OSA-35・OSA-37</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">集計画面の軸となる業務分類（表示順）。<b>変更した瞬間に全画面の集計へ反映</b>します。分類名の変更・順序入れ替え・追加・削除すべて可能。</p>
   <div class="note">「その他売上」として寄せる案は不採用です（想定外の項目にも対応できないため）。代わりに、業務分類単位で<b>個人集計から除外</b>のON/OFFを切り替えます。細かい粒度（取引先・請求コード単位）が必要な場合は<a class="clickable" onclick="openTab('m-billing')">請求分類マスタ</a>でコード単位でも設定できます。</div>
   <div class="toolbar"><input class="form-input" id="newBc" style="max-width:220px" placeholder="追加する業務分類名"><button class="btn btn-primary btn-sm" onclick="addBc()">分類を追加</button><span style="flex:1"></span><span class="subtitle">順序欄の数値を変更すると並び替わります</span></div>
   <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>表示順</th><th>業務分類名</th>${PERIODS.map(p=>`<th class="num">${pMonth(p)}月</th>`).join('')}<th style="text-align:center">個人集計から除外</th><th>表示しない組織（複数選択可）</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
@@ -1595,13 +1595,13 @@ VIEWS['m-billing'] = ()=>{
   const un=MD(PERIOD).lines.filter(l=>effBc(l)==='未分類');
   const allBc=[...new Set(PERIODS.flatMap(p=>Object.keys(agg(p).totals.byBc)))];
   $view().innerHTML=`<div class="page-wrap"><p class="subtitle">報酬細目コードをどの業務分類に紐づけるか設定。<b>変更すると全画面の集計に即時反映</b>。A事務所・B事務所で重複する細目コードは請求元で区別します。</p>
-  <div class="card"><div class="card-header"><h3 class="card-title">シスサポチームへ帰属させる業務分類<span class="req-tag">OSA-05</span></h3></div><div class="card-body">
+  <div class="card"><div class="card-header"><h3 class="card-title">シスサポチームへ帰属させる業務分類</h3></div><div class="card-body">
     <p class="subtitle">チェックした業務分類の報酬は<b>個人の実績・時間生産性から除外</b>し、システムサポートチームへ集約します。どのコードを移すかは要確認事項です。</p>
     <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;margin-top:.6rem">
     ${allBc.map(b=>`<label style="display:flex;align-items:center;gap:.35rem;font-size:.85rem"><input type="checkbox" ${isSysBc(b)?'checked':''} onchange="toggleSysBc('${esc(b)}',this.checked)">${esc(b)}</label>`).join('')}
-    </div>
+</div>
     <div class="note" style="margin-top:.8rem">現在の対象：${M.sysBc.map(esc).join('・')||'なし'}　→　<a class="clickable" onclick="openTab('team')">チーム集計で影響額を見る</a></div>
-  </div></div>
+</div></div>
   ${un.length?`<div class="note note-warn"><b>${pLabel(PERIOD)}の未分類が ${un.length}明細（${yen(un.reduce((s,l)=>s+l.amount,0))}）</b>あります（該当コード：${[...new Set(un.map(l=>l.code))].join('・')}）。</div>`:'<div class="note">この月に未分類の請求レコードはありません。</div>'}
   <div class="toolbar"><label>検索</label><input value="${esc(q)}" placeholder="細目名／コード／業務分類" oninput="state.mbQ=this.value;render()"><span style="flex:1"></span><span class="record-count">${shown.length}件</span></div>
   <div class="toolbar">
@@ -1613,13 +1613,13 @@ VIEWS['m-billing'] = ()=>{
     <select class="form-select" id="newBillBc">${['未分類',...bcOf()].map(b=>`<option>${esc(b)}</option>`).join('')}</select>
     <button class="btn btn-primary btn-sm" onclick="addBillingMeta()">細目を追加</button>
     <span style="flex:1"></span><span class="subtitle">${shown.length}件表示（請求データ由来${list.filter(x=>x.fromData).length}件＋手動追加${(M.billingMeta||[]).length}件）</span>
-  </div>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>細目コード</th><th>報酬細目</th><th>取引区分</th><th>業務分類（変更可）</th><th style="text-align:center">帰属</th><th style="text-align:center">個人除外<span class="req-tag">OSA-29</span></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${shown.length>200?`<div class="card-body subtitle">上位200件を表示</div>`:''}</div></div>`;
+</div>
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>細目コード</th><th>報酬細目</th><th>取引区分</th><th>業務分類（変更可）</th><th style="text-align:center">帰属</th><th style="text-align:center">個人除外</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${shown.length>200?`<div class="card-body subtitle">上位200件を表示</div>`:''}</div></div>`;
 };
 window.setCodeBc=(key,bc)=>{ M.codeMap[key]=bc; invalidate(); render(); };
 window.toggleSysBc=(bc,on)=>{ M.sysBc = on ? [...new Set([...M.sysBc,bc])] : M.sysBc.filter(x=>x!==bc); invalidate(); render(); };
 window.toggleExCode=(key,on)=>{ if(on) M.excludePersonalCode[key]=true; else delete M.excludePersonalCode[key]; invalidate(); render(); };
-/* OSA-37：請求分類マスタの直接編集（手動追加・報酬細目の付け替え） */
+/* ：請求分類マスタの直接編集（手動追加・報酬細目の付け替え） */
 window.addBillingMeta=()=>{
   const o=document.getElementById('newBillOffice').value;
   const c=(document.getElementById('newBillCode').value||'').trim();
@@ -1660,7 +1660,7 @@ VIEWS['m-org'] = ()=>{
     <td style="text-align:center"><input type="checkbox" ${o.hidden?'checked':''} onchange="M.orgs[${i}].hidden=this.checked;invalidate();render()"></td>
     <td class="num">${cnt}名</td>
     <td><button class="btn btn-outline btn-sm" onclick="removeOrg(${i})" ${cnt?'disabled title="所属担当者がいる組織は削除できません"':''}>削除</button></td></tr>`}).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">親組織の設定、チーム単位でのみ集計する組織、非表示区分。<b>組織名もその場で編集でき、ダッシュボード・従業員別成績の集計単位に即時反映</b>されます。<span class="req-tag">OSA-07・OSA-37</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">親組織の設定、チーム単位でのみ集計する組織、非表示区分。<b>組織名もその場で編集でき、ダッシュボード・従業員別成績の集計単位に即時反映</b>されます。</p>
   <div class="toolbar"><input class="form-input" id="newOrgName" style="max-width:220px" placeholder="追加する組織名">
     <select class="form-select" id="newOrgParent" style="max-width:200px"><option value="">（親組織なし＝ルート）</option>${M.orgs.map(o=>`<option>${esc(o.name)}</option>`).join('')}</select>
     <button class="btn btn-primary btn-sm" onclick="addOrg()">組織を追加</button></div>
@@ -1726,7 +1726,7 @@ VIEWS['m-employee'] = ()=>{
     <td style="text-align:center"><input type="checkbox" ${e.noLogin?'checked':''} onchange="M.employees[${i}].noLogin=this.checked;render()"></td>
     <td style="text-align:center"><input type="checkbox" ${e.aiPerm?'checked':''} ${e.role==='ADMIN'?'disabled title="管理者は常に利用可"':''} onchange="setAiPerm('${esc(e.name)}',this.checked)"></td>
     <td><button class="btn btn-outline btn-sm" onclick="removeEmp(${i})">削除</button></td></tr>`}).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">所属組織を組織マスタから選択、CDB担当者コードとkintone IDを紐づけ、権限・初期PW・ログイン不可・AIチャット権限を設定。ログインIDはkintoneと同一。<b>すべての項目を直接編集・追加・削除できます</b>。<span class="req-tag">OSA-37</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">所属組織を組織マスタから選択、CDB担当者コードとkintone IDを紐づけ、権限・初期PW・ログイン不可・AIチャット権限を設定。ログインIDはkintoneと同一。<b>すべての項目を直接編集・追加・削除できます</b>。</p>
   <div class="note"><b>パスワードポリシー</b>：大文字・小文字の英字／数字／記号の4種すべてを含む<b>10桁以上</b>。初回ログイン時にPW変更が強制されます（<a class="clickable" onclick="firstLoginDemo()">動作を見る</a>）。<br>
   <b>AIチャット権限</b>は社長・幹部のみに付与する運用です（マスタで許可された担当者のみメニューに表示）。</div>
   <div class="toolbar"><input class="form-input" id="newEmpName" style="max-width:200px" placeholder="追加する担当者氏名">
@@ -1736,7 +1736,7 @@ VIEWS['m-employee'] = ()=>{
   <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>担当者氏名</th><th>所属組織</th><th>CDB担当者CD</th><th>kintone ID（ログインID）</th><th>権限</th><th>初期PW</th><th style="text-align:center">ログイン不可</th><th style="text-align:center">AIチャット権限</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   ${M.employees.length>limit?`<div class="card-body subtitle">全${M.employees.length}名のうち上位${limit}名を表示</div>`:''}</div>
   <div class="note-warn note">デモ確認：担当者代表「${esc(demoUserName)}」のAIチャット権限を切り替えると、「担当者として表示」時にAIチャットメニューが出る／消えるのを確認できます（現在：${state.aiUser?'あり':'なし'}）。</div>
-  </div>`;
+</div>`;
 };
 window.addEmp=()=>{
   const el=document.getElementById('newEmpName'); const v=(el.value||'').trim();
@@ -1764,7 +1764,7 @@ window.firstLoginDemo=()=>{
     <input class="form-input" id="pwNew" type="password" oninput="pwLive()" placeholder="10桁以上・4種を含む">
     <div id="pwHint" style="margin-top:.6rem"></div>
     <button class="btn btn-primary" style="margin-top:.8rem" id="pwBtn" disabled onclick="alert('パスワードを変更しました（デモ）');document.querySelector('.modal-back').remove()">変更して続行</button>
-  </div>`);
+</div>`);
   pwLive();
 };
 window.pwLive=()=>{
@@ -1803,12 +1803,12 @@ VIEWS['m-alloc'] = ()=>{
       <td class="num"><span class="status-badge ${ok?'status-valid':'status-error'}">${tot}%</span></td>
       <td><button class="btn btn-outline btn-sm" onclick="M.alloc.splice(${ri},1);invalidate();render()">削除</button></td></tr>`;
   }).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">関与先・業務分類を選んで担当者按分（主担当＋副担当 最大4名）。<b>合計100%の行のみ集計へ適用</b>されます。<span class="req-tag">管理者のみ</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">関与先・業務分類を選んで担当者按分（主担当＋副担当 最大4名）。<b>合計100%の行のみ集計へ適用</b>されます。</p>
   <div class="toolbar"><button class="btn btn-primary btn-sm" onclick="addAllocRow()">按分行を追加</button>
     <span class="subtitle">適用開始/終了月は YYYY/MM 形式</span></div>
   ${M.alloc.length?'':'<div class="note">現在、按分設定は<b>0件</b>です（元データの按分マスタも0件のため初期状態を合わせています）。</div>'}
   <div class="card"><div class="scroll-x"><table class="data-table"><thead><tr><th>関与先</th><th>業務分類</th><th>適用開始</th><th>適用終了</th><th>担当者1</th><th class="num">割合1</th><th>担当者2</th><th class="num">割合2</th><th>担当者3</th><th class="num">割合3</th><th>担当者4</th><th class="num">割合4</th><th class="num">合計</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
-  </div>`;
+</div>`;
 };
 window.setAllocPct=(ri,xi,v)=>{ M.alloc[ri].shares[xi].pct=Number(v)||0; invalidate(); render(); };
 window.setAllocClient=(ri,v)=>{ const [office,code]=v.split('|'); const c=clientList().find(x=>x.office===office&&x.code===code);
@@ -1826,16 +1826,16 @@ VIEWS['m-indirect'] = ()=>{
     <td><input value="${esc(r.client)}" style="min-width:140px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.indirect[${i}].client=this.value;invalidate();render()"></td>
     <td><input value="${esc(r.name)}" style="min-width:260px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.indirect[${i}].name=this.value;invalidate();render()"></td>
     <td><button class="btn btn-outline btn-sm" onclick="removeIndirect(${i})">削除</button></td></tr>`).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">TKC日報形式の間接業務判定マスタ（ver3）。「関与先名」＋「業務名・活動名」の2軸判定で<b>間接時間</b>として扱います。<b>すべての項目を編集・追加・削除できます</b>。<span class="req-tag">OSA-36・OSA-37</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">TKC日報形式の間接業務判定マスタ（ver3）。「関与先名」＋「業務名・活動名」の2軸判定で<b>間接時間</b>として扱います。<b>すべての項目を編集・追加・削除できます</b>。</p>
   <div class="note">旧 kintone 日報の「業務分類＝間接業務／決裁業務／研修・会議／保険提案／委員会・プロジェクト／研修講師・育成業務／税理士固有業務」から、<b>TKC日報の2軸判定（関与先名＋業務名）に差替</b>（ver3）。既存の集計は旧ロジックで動作中。TKC日報の実取込時にこのマスタに切り替えます。</div>
   <div class="toolbar">
     <input class="form-input" id="newIndClient" style="max-width:160px" placeholder="関与先名（例: （間接業務））" value="（間接業務）">
     <input class="form-input" id="newIndName" style="max-width:260px" placeholder="業務名・活動名">
     <button class="btn btn-primary btn-sm" onclick="addIndirect()">項目を追加</button>
     <span style="flex:1"></span><span class="record-count">${M.indirect.length}項目</span>
-  </div>
+</div>
   <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>No.</th><th>関与先名</th><th>業務名・活動名</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
-  </div>`;
+</div>`;
 };
 window.addIndirect=()=>{
   const c=(document.getElementById('newIndClient').value||'').trim();
@@ -1862,7 +1862,7 @@ VIEWS['m-client'] = ()=>{
       <td>${c.to?'<span class="status-badge status-valid">紐づけ済</span>':'<span class="status-badge status-warning">未紐づけ</span>'}</td>
       <td><button class="btn btn-outline btn-sm" onclick="removeClientMap(${i})">削除</button></td></tr>`;
   }).join('');
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">原則は取込データ内の関与先コードで集計しますが、<b>4桁の関与先コードが混在</b>するため、イレギュラー対応として紐づけます。<b>すべての項目を編集・追加・削除できます</b>。<span class="req-tag">OSA-37</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">原則は取込データ内の関与先コードで集計しますが、<b>4桁の関与先コードが混在</b>するため、イレギュラー対応として紐づけます。<b>すべての項目を編集・追加・削除できます</b>。</p>
   <div class="note">全期間の実データに<b>4桁コードが${M.clientMap.length}件</b>存在します（紐づけ済 ${M.clientMap.filter(c=>c.to).length}/${M.clientMap.length}）。</div>
   <div class="toolbar">
     <label>追加</label>
@@ -1871,7 +1871,7 @@ VIEWS['m-client'] = ()=>{
     <input class="form-input" id="newCliName" style="min-width:160px" placeholder="関与先名">
     <input class="form-input" id="newCliTo" style="width:120px" placeholder="紐づけ先CD">
     <button class="btn btn-primary btn-sm" onclick="addClientMap()">紐づけを追加</button>
-  </div>
+</div>
   <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>元の関与先CD</th><th>関与先名</th><th class="num">明細(${pMonth(PERIOD)}月)</th><th class="num">金額</th><th>紐づけ先CD</th><th>状態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
 };
 window.addClientMap=()=>{
@@ -1889,7 +1889,7 @@ window.removeClientMap=(i)=>{
   M.clientMap.splice(i,1); invalidate(); render();
 };
 
-/* ---------- 来期の意向入力（OSA-14：ノルマではなく意向） ---------- */
+/* ---------- 来期の意向入力（：ノルマではなく意向） ---------- */
 VIEWS.targets = ()=>{
   const list=A().employees;
   if(!state.emp||!list.some(x=>x.name===state.emp)) state.emp=list[0].name;
@@ -1900,12 +1900,12 @@ VIEWS.targets = ()=>{
     return {m:m,p:p,has:PERIODS.includes(p)}; });
   const y=ytd(e.name,PERIOD);
   $view().innerHTML=`<div class="page-wrap">
-    <p class="subtitle">来期に向けた<b>本人の意向</b>を月別に入力します。実績と並べて、上長との面談で使います。<span class="req-tag">OSA-14</span></p>
+    <p class="subtitle">来期に向けた<b>本人の意向</b>を月別に入力します。実績と並べて、上長との面談で使います。</p>
     <div class="note"><b>この入力はノルマ（営業目標）ではありません。</b><br>
       ・「もっと仕事を持ちたい」「今期は少し減らしたい」という<b>希望・意向</b>を数字で表すための欄です。<br>
       ・達しなかったからといって評価が下がるものではなく、担当替えを妨げるものでもありません。<br>
       ・<b>一人で決めるものではなく、上長と相談して合意した値</b>を入力してください。面談の材料として使います。<br>
-      <span class="subtitle" style="display:block;margin-top:.4rem">※ 画面上の表現（「意向額」「進捗率」）は9/25レビューでのご判断をいただきたい項目です。従来の「目標」「達成率」からの変更案としてお示ししています。</span></div>
+</div>
     <div class="toolbar"><label>担当者</label><select onchange="state.emp=this.value;render()">${opts}</select>
       <label>期首月</label><select onchange="alert('事業年度の期首月はマスタ設定項目です（現在：'+${FY_START}+'月）。11月開始と4月開始のどちらで運用するかをご確認ください。')"><option>${FY_START}月</option></select>
       <span style="flex:1"></span><span class="subtitle">当社事業年度：${FY_START}月〜翌${FY_MONTHS[11]}月</span></div>
@@ -1914,7 +1914,7 @@ VIEWS.targets = ()=>{
       ${kpi('今月の実績',yen(e.total),pct1(e.total/intentOf(e.name,PERIOD)*100)+' 進捗')}
       ${kpi('年度累計 意向',yen(y.intent),y.periods.length+'ヶ月分')}
       ${kpi('年度累計 実績',yen(y.actual),pct1(y.rate)+' 進捗')}
-    </div>
+</div>
     <div class="card"><div class="card-header"><h3 class="card-title">月別 意向額と実績</h3></div><div class="scroll-x"><table class="data-table" style="min-width:900px"><thead>
       <tr><th class="sticky-c">区分</th><th class="num">年度累計</th>${cols.map(c=>`<th class="num ${c.p===PERIOD?'mcol cur':''}">${c.m}月</th>`).join('')}</tr></thead><tbody>
       <tr><td class="sticky-c">意向額（入力）</td><td class="num"><b>${yenS(y.intent)}</b></td>
@@ -1928,8 +1928,8 @@ VIEWS.targets = ()=>{
     <div class="card"><div class="card-header"><h3 class="card-title">上長との面談メモ（任意）</h3></div><div class="card-body">
       <textarea class="form-input" rows="3" placeholder="例：来期は決算業務を増やしたい／育休復帰のため件数を抑えたい など" style="min-height:auto"></textarea>
       <div style="margin-top:.75rem"><button class="btn btn-primary" onclick="alert('意向とメモを保存しました（デモ）')">保存</button></div>
-    </div></div>
-  </div>`;
+</div></div>
+</div>`;
 };
 window.setIntent=(emp,p,v)=>{ const n=Number(String(v).replace(/[^\d.-]/g,'')); state.targets[emp+'|'+p]=isFinite(n)?n:''; render(); };
 
@@ -1941,7 +1941,7 @@ VIEWS.confirmations = ()=>{
   const ra=reassignments(PERIOD);
   $view().innerHTML=`<div class="page-wrap"><p class="subtitle">担当者が「月次確認（担当者）」で自分の担当関与先を確認・提出した状況の一覧（${pLabel(PERIOD)}）。未提出者が残っていると月次締めができません。</p>
   <div class="kpi-card-grid">${kpi('提出済み',done+'名','月次確認 完了')}${kpi('未提出',(emps.length-done)+'名','確認待ち')}${kpi('対象',emps.length+'名','担当者')}${kpi('担当変更（移管）',ra?ra.nMoved+'件':'−',ra?'前月比・本人へ通知':'前月データなし')}</div>
-  <div class="card"><div class="card-header"><h3 class="card-title">担当者別 確認状況</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>担当者</th><th>オフィス</th><th class="num">確認済 / 担当関与先</th><th>進捗</th><th>担当変更<span class="req-tag">OSA-13</span></th><th>提出</th><th></th></tr></thead><tbody>
+  <div class="card"><div class="card-header"><h3 class="card-title">担当者別 確認状況</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>担当者</th><th>オフィス</th><th class="num">確認済 / 担当関与先</th><th>進捗</th><th>担当変更</th><th>提出</th><th></th></tr></thead><tbody>
     ${emps.map(e=>{const s=empConfirmStats(e.name);const pct=s.total?Math.round(s.done/s.total*100):0;const sub=!!state.submitted[e.name+'|'+PERIOD];
       const rm=ra&&ra.moved[e.name]?ra.moved[e.name].length:0, ad=ra&&ra.added[e.name]?ra.added[e.name].length:0;
       return `<tr><td>${esc(e.name)}</td><td>${e.office}</td><td class="num">${s.done} / ${s.total}</td>
@@ -1952,34 +1952,34 @@ VIEWS.confirmations = ()=>{
     </tbody></table></div></div>
     <div class="card"><div class="card-header"><h3 class="card-title">未提出者一覧</h3></div><div class="card-body">
     ${emps.filter(e=>!state.submitted[e.name+'|'+PERIOD]).map(e=>`<span class="pill status-warning" style="margin:.2rem">${esc(e.name)}</span>`).join('')||'<span class="status-badge status-valid">全員提出済み</span>'}
-    </div></div>
-  </div>`;
+</div></div>
+</div>`;
 };
 
-/* ---------- チェック・突合（OSA-15：継続） ---------- */
+/* ---------- チェック・突合（：継続） ---------- */
 VIEWS.reconciliation = ()=>{
   const T=A().totals, imp=A().import;
   const hours=Object.values(MD(PERIOD).daily||{}).reduce((s,d)=>s+d.total,0);
   const sumLines=MD(PERIOD).lines.reduce((s,l)=>s+l.amount,0);
   const sumEmp=A().employees.reduce((s,e)=>s+e.total,0)+T.teamSys;
   const diff=sumLines+T.teamShisan+T.consul-(sumEmp+T.teamShisan);
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">取込データの整合性チェック・突合（${pLabel(PERIOD)}）。<span class="req-tag">OSA-15：継続</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">取込データの整合性チェック・突合（${pLabel(PERIOD)}）。</p>
   <div class="note">「読めなかったデータを報告する機能」は残す方針で確定しています。エラー時は伝票番号・関与先まで特定して表示し、取込を中止します。</div>
   <div class="card"><div class="card-header"><h3 class="card-title">チェック項目</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>チェック内容</th><th>結果</th><th class="num">件数/金額</th></tr></thead><tbody>
   <tr><td>請求データで紐づけできなかった関与先</td><td><span class="status-badge status-valid">OK</span></td><td class="num">0件</td></tr>
   <tr><td>業務分類できなかった請求レコード</td><td><span class="status-badge ${imp.unmatched.length?'status-warning':'status-valid'}">${imp.unmatched.length?'要確認':'OK'}</span></td><td class="num">${imp.unmatched.length}件</td></tr>
   <tr><td>関与先名／担当者が空白でスキップした行</td><td><span class="status-badge ${imp.skipped.length?'status-warning':'status-valid'}">${imp.skipped.length?'要確認':'OK'}</span></td><td class="num">${imp.skipped.length}件</td></tr>
-  <tr><td>和暦が混在していた項目の西暦変換<span class="req-tag">OSA-08</span></td><td><span class="status-badge status-valid">変換済み</span></td><td class="num">全明細</td></tr>
+  <tr><td>和暦が混在していた項目の西暦変換</td><td><span class="status-badge status-valid">変換済み</span></td><td class="num">全明細</td></tr>
   <tr><td>FMS/kintone請求額合計 = 全員の集計合計（シスサポ集約分を含む）</td><td><span class="status-badge ${Math.abs(diff)<1?'status-valid':'status-error'}">${Math.abs(diff)<1?'一致':'不一致'}</span></td><td class="num">${yen(T.all)}</td></tr>
   <tr><td>日報APIの時間 = 全員の集計時間</td><td><span class="status-badge status-valid">一致</span></td><td class="num">${num(Math.round(hours))}h</td></tr>
-  <tr><td>前月との担当者変更の検出<span class="req-tag">OSA-13</span></td><td><span class="status-badge status-info">検出</span></td><td class="num">${reassignments(PERIOD)?reassignments(PERIOD).nMoved+'件':'−'}</td></tr>
+  <tr><td>前月との担当者変更の検出</td><td><span class="status-badge status-info">検出</span></td><td class="num">${reassignments(PERIOD)?reassignments(PERIOD).nMoved+'件':'−'}</td></tr>
   </tbody></table></div></div>
   <div class="card"><div class="card-header"><h3 class="card-title">月次の推移（突合の観点）</h3></div><div class="card-body"><div class="trend-grid">
     ${trendCard('全社 報酬総額',PERIODS.map(p=>({p:p,v:agg(p).totals.all})),yenG)}
     ${trendCard('取込明細数',PERIODS.map(p=>({p:p,v:agg(p).import.lines_officeA+agg(p).import.lines_officeB})),v=>num(v)+'件')}
     ${trendCard('未分類',PERIODS.map(p=>({p:p,v:agg(p).import.unmatched.length})),v=>num(v)+'件')}
-  </div></div></div>
-  </div>`;
+</div></div></div>
+</div>`;
 };
 
 /* ---------- 締め処理・年次 ---------- */
@@ -2015,7 +2015,7 @@ VIEWS['period-close'] = ()=>{
   $view().innerHTML=`<div class="page-wrap"><p class="subtitle">月次更新（締め）・年次更新。</p>
   <div class="card"><div class="card-header"><h3 class="card-title">取込済み月の締め状況</h3></div><div class="card-body">
     <div class="hrow-wrap">${PERIODS.map(p=>`<div class="hrow"><span class="k">${pLabel(p)}</span><span class="v"><span class="status-badge ${CLOSED[p]?'status-warning':'status-valid'}">${CLOSED[p]?'締め済み':'未締め'}</span></span></div>`).join('')}</div>
-  </div></div>
+</div></div>
   <div class="bar2">
     <div class="card"><div class="card-header"><h3 class="card-title">月次更新（締め処理）— ${pLabel(PERIOD)}</h3></div><div class="card-body">
       <p class="subtitle">担当者全員が月次確認を提出したあとに締めます。締め後は担当者は閲覧のみになります。</p>
@@ -2024,18 +2024,18 @@ VIEWS['period-close'] = ()=>{
         <span class="status-badge ${isClosed()?'status-warning':'status-valid'}">${PERIOD} ${isClosed()?'締め済み':'未締め'}</span>
         <button class="btn ${isClosed()?'btn-outline':'btn-primary'}" ${!isClosed()&&closeDone()<closeTargets()?'disabled title="担当者の確認が未完了です"':''} onclick="doMonthlyClose()">${isClosed()?'締めを解除':'月次更新を実行'}</button>
         <button class="btn btn-outline btn-sm" onclick="openTab('confirmations')">確認状況を見る</button>
-      </div>
-    </div></div>
+</div>
+</div></div>
     <div class="card"><div class="card-header"><h3 class="card-title">年次更新（10月）</h3></div><div class="card-body">
       <p class="subtitle">10月の月次更新時に実施。無効フラグ（担当外）の関与先は翌期の画面から消えます。</p>
       <div class="hrow"><span class="k">無効フラグ（担当外）の関与先</span><span class="v">${Object.keys(M.invalid).length} 件</span></div>
       <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="markInvalidDemo()">検出した担当変更に無効フラグを設定</button>
         <button class="btn btn-outline" ${Object.keys(M.invalid).length?'':'disabled'} onclick="runAnnual()">年次更新を実行</button>
-      </div>
+</div>
       ${Object.keys(M.invalid).length?`<div class="note note-warn" style="margin-top:.75rem">翌期から除外される対象：<br>${Object.keys(M.invalid).slice(0,20).map(k=>esc(k.split('|')[0]+' / 関与先CD '+k.split('|')[1])).join('<br>')}${Object.keys(M.invalid).length>20?'<br>…他'+(Object.keys(M.invalid).length-20)+'件':''}</div>`:'<div class="note" style="margin-top:.75rem">現在、無効フラグの関与先はありません。</div>'}
-    </div></div>
-  </div></div>`;
+</div></div>
+</div></div>`;
 };
 
 /* ---------- 請求データ一覧 ---------- */
@@ -2048,7 +2048,7 @@ VIEWS['billing-data'] = ()=>{
   const empOpts=['',...ALL_EMPS.map(x=>x.name)].map(n=>`<option value="${esc(n)}">${esc(n)||'(未指定)'}</option>`).join('');
   const canEdit = ROLE==='ADMIN';
   const editCnt = Object.keys(state.billingEdits).length;
-  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">取り込んだ請求データを月ごとに一覧。<b>管理者は担当者を直接編集できます</b>（再取込不要で即時再集計）。日付・摘要は<b>西暦に正規化済み</b><span class="req-tag">OSA-08・OSA-33（2-5）</span></p>
+  $view().innerHTML=`<div class="page-wrap"><p class="subtitle">取り込んだ請求データを月ごとに一覧。<b>管理者は担当者を直接編集できます</b>（再取込不要で即時再集計）。日付・摘要は<b>西暦に正規化済み</b></p>
   ${canEdit?`<div class="note"><b>管理者編集機能</b>：担当者が元データ側で誤っている場合、下表の「担当者」セルで差し替えできます。変更は全画面の集計へ即時反映され、次回取込時に<b>保持するか上書きするか</b>はマスタ運用で選べる想定（現在は「編集を保持」）。関与先マスタ・担当者マスタのメンテは、別途それぞれのマスタ画面から。<br>現在の編集件数：<b>${editCnt}件</b> ${editCnt?`<a class="clickable" onclick="clearBillingEdits()">すべての編集を取消</a>`:''}</div>`:''}
   <div class="toolbar">
     <label>対象月</label><select onchange="setPeriod(this.value)">${PERIODS.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${pLabel(p)}</option>`).join('')}</select>
@@ -2057,7 +2057,7 @@ VIEWS['billing-data'] = ()=>{
     <label>検索</label><input value="${esc(f.q)}" placeholder="関与先/担当者" oninput="state.bf.q=this.value;render()">
     ${canEdit?`<label style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem"><input type="checkbox" ${f.onlyEdited?'checked':''} onchange="state.bf.onlyEdited=this.checked;render()">編集済のみ</label>`:''}
     <span style="flex:1"></span><span class="record-count">${num(rows.length)}件 / 合計 ${yen(total)}</span>
-  </div>
+</div>
   <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>年月日</th><th>ｵﾌｨｽ</th><th>関与先</th><th>担当者${canEdit?'（編集可）':''}</th><th>報酬細目</th><th>細目CD</th><th>業務分類</th><th class="num">金額</th><th>摘要</th></tr></thead><tbody>
   ${rows.slice(0,200).map(l=>{
     const key=billingKey(l); const ed=state.billingEdits[key]; const emp=effEmp(l);
@@ -2067,7 +2067,7 @@ VIEWS['billing-data'] = ()=>{
     return `<tr${ed?' style="background:#f0f6ff"':''}><td>${esc(l.date)}</td><td>${esc(l.office)}</td><td>${esc(l.client)}</td><td>${empCell}</td><td>${esc(l.detail)}</td><td>${esc(l.code)}</td><td>${effBc(l)==='未分類'?'<span class="status-badge status-warning">未分類</span>':esc(effBc(l))}</td><td class="num">${yen(l.amount)}</td><td class="subtitle">${esc(l.memo)}</td></tr>`;
   }).join('')}
   </tbody></table></div>${rows.length>200?`<div class="card-body subtitle">上位200件を表示（全${num(rows.length)}件）</div>`:''}</div>
-  </div>`;
+</div>`;
 };
 window.setBillingEmp=(key,v)=>{
   const parts=key.split('|'); const l=MD(PERIOD).lines.find(x=>x.office===parts[0]&&x.voucher===parts[1]&&x.code===parts[2]&&x.clientCode===parts[3]);
@@ -2091,7 +2091,7 @@ VIEWS.ai = ()=>{
     <div class="chat-log" id="chatlog">${AI_LOG.map(m=>`<div class="chat-msg ${m.who==='ai'?'chat-ai':'chat-user'}">${esc(m.t)}</div>`).join('')}</div>
     <div style="margin-top:.75rem">${chips.map(c=>`<span class="chip" onclick="aiAsk('${esc(c)}')">${c}</span>`).join('')}</div>
     <div style="display:flex;gap:.5rem;margin-top:.75rem"><input class="form-input" id="aiin" placeholder="質問を入力…" onkeydown="if(event.key==='Enter')aiAsk(this.value)"><button class="btn btn-primary" onclick="aiAsk(document.getElementById('aiin').value)">送信</button></div>
-  </div></div></div>`;
+</div></div></div>`;
   document.getElementById('chatlog').scrollTop=1e9;
 };
 window.aiAsk=(q)=>{ q=(q||'').trim(); if(!q)return; AI_LOG.push({who:'user',t:q}); AI_LOG.push({who:'ai',t:aiAnswer(q)}); render(); };
@@ -2122,7 +2122,7 @@ function aiAnswer(q){
   }
   if(q.includes('総額')||q.includes('合計')||q.includes('全社')||q.includes('推移'))
     return `全社の報酬総額の推移：\n`+PERIODS.map(p=>`・${pLabel(p)} ${yen(agg(p).totals.all)}`).join('\n');
-  return `「${q}」を解析しました。デモ版では以下に対応：全社/A事務所/B事務所の合計、業務分類別合計と推移、担当者別実績と推移、前月比、時間生産性ランキング、CSV出力。`;
+  return `「${q}」を解析しました。全社／A事務所／B事務所の合計、業務分類別合計と推移、担当者別実績と推移、前月比、時間生産性ランキング、CSV出力に対応しています。`;
 }
 
 /* ---------- 起動 ---------- */
