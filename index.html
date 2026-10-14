@@ -321,6 +321,7 @@ const M = {
      粒度は業務分類単位。追加の細目コード単位は excludePersonalCode で指定可能。 */
   excludePersonalBc: ['紹介料'],
   excludePersonalCode: {}, // 'office|code' => true
+  bcGroup5: {},  // 5分類マスタの上書き： {業務分類: 5分類名}。空ならBC_GROUPのデフォルトを使用
   clientMap: [],
   alloc: [],
   adjust: {},
@@ -561,16 +562,23 @@ function reassignments(p){
   Object.keys(b).forEach(k=>{
     const curE=Object.keys(b[k].emps), prevE=a[k]?Object.keys(a[k].emps):[];
     curE.forEach(e=>{ if(prevE.includes(e)) return;
-      push(added,e,{code:b[k].code,name:b[k].name,office:b[k].office,amount:b[k].emps[e],from:prevE.filter(x=>x!==e)});
-      if(!a[k]) rows.push({kind:'新規',client:b[k].name,code:b[k].code,office:b[k].office,from:'—',to:e,prevAmount:0});
+      const isNewClient = !a[k];              // 前月に関与先そのものが存在しない＝完全新規
+      const from = prevE.filter(x=>x!==e);
+      push(added,e,{code:b[k].code,name:b[k].name,office:b[k].office,amount:b[k].emps[e],from:from,isNew:isNewClient});
+      if(isNewClient){
+        rows.push({kind:'新規',client:b[k].name,code:b[k].code,office:b[k].office,from:'—',to:e,prevAmount:0});
+      } else if(from.length){
+        rows.push({kind:'引継ぎ',client:b[k].name,code:b[k].code,office:b[k].office,from:from.join('・'),to:e,prevAmount:0});
+      }
     });
   });
-  const order={'移管':0,'新規':1,'当月請求なし':2};
+  const order={'移管':0,'新規':1,'引継ぎ':2,'当月請求なし':3};
   rows.sort((x,y)=>order[x.kind]-order[y.kind]||y.prevAmount-x.prevAmount);
   return {prev:pv,moved:moved,gone:gone,added:added,rows:rows,
     nMoved:rows.filter(r=>r.kind==='移管').length,
     nGone:rows.filter(r=>r.kind==='当月請求なし').length,
-    nNew:rows.filter(r=>r.kind==='新規').length};
+    nNew:rows.filter(r=>r.kind==='新規').length,
+    nHandover:rows.filter(r=>r.kind==='引継ぎ').length};
 }
 
 function pwCheck(pw){ pw=pw||'';
@@ -585,6 +593,7 @@ const NAV = [
    {path:'employees',label:'従業員別成績',icon:'◎',admin:true},
    {path:'cases',label:'受託件数',icon:'□',admin:true},
    {path:'tkc',label:'TKC活用状況',icon:'◈',admin:true},
+   {path:'client-productivity',label:'関与先別 時間・生産性',icon:'◇',leaderPlus:true},
  ]},
  {title:'マスタ', items:[{path:'masters',label:'マスタデータ',icon:'■'}]},
  {title:'入力', items:[{path:'targets',label:'来期の計画入力',icon:'■'}]},
@@ -602,7 +611,7 @@ const NAV = [
  ]},
  {title:'AI', items:[{path:'ai',label:'AIチャット集計',icon:'○',aiGated:true}]},
 ];
-const TITLES = {dashboard:'ダッシュボード','my-performance':'個人成績',employees:'従業員別成績',cases:'受託件数',tkc:'TKC活用状況',
+const TITLES = {dashboard:'ダッシュボード','my-performance':'個人成績',employees:'従業員別成績',cases:'受託件数',tkc:'TKC活用状況','client-productivity':'関与先別 時間・生産性',
  team:'チーム集計',nippo:'TKC日報連携（CSV）','staff-close':'月次確認（担当者）',reassign:'担当変更の検出',
  masters:'マスタデータ','m-employee':'担当者マスタ','m-org':'組織マスタ','m-alloc':'按分マスタ','m-bc':'業務分類マスタ','m-billing':'請求分類マスタ','m-service':'提供サービスマスタ','m-client':'関与先コード紐づけ','m-indirect':'業務日報 直接/間接時間マスタ',
  targets:'来期の計画入力',imports:'データ取込',confirmations:'確認状況（管理者）',reconciliation:'チェック・突合',
@@ -650,7 +659,7 @@ window.setPeriod=(p)=>{ PERIOD=p; render(); };
 
 /* ---------- shell ---------- */
 function render(){
-  const visible = (it)=> (!it.admin||ROLE==='ADMIN') && (!it.aiGated||aiAllowed());
+  const visible = (it)=> (!it.admin||ROLE==='ADMIN') && (!it.leaderPlus||ROLE==='ADMIN'||ROLE==='LEADER') && (!it.aiGated||aiAllowed());
   const secs = NAV.map(sec=>{
     const items = sec.items.filter(visible);
     if(!items.length) return '';
@@ -695,17 +704,25 @@ const $view = ()=>document.getElementById('view');
 /* ---------- 共通部品 ---------- */
 /* （マスタ反映）：業務分類マスタ（ver3）順。グループは個人ページの分類別内訳で使用 */
 const BC_MASTER=['監査報酬','巡回監査決算料','年一関与決算料','年末調整計算料','個人確定申告報酬','月次コンサル','その他コンサル','M&A','相続税申告報酬','相続税試算報酬','株式評価報酬','（資）贈与税申告報酬','（資）所得税申告報酬','コンサルティング業務委託報酬','（資）その他報酬','システムレンタル料','システム立ち上げ','（シス）経理代行','（シス）給与代行','システムコンサル','（シス）その他報酬','その他','B事務所シスサポ','モニタリング費','経営力向上計画の新規申請','経営力向上計画の変更申請','紹介料','税務相談料'];
-/* ：個人ページ 報酬内訳を「監査／コンサル／資産税／その他」のグループで表示 */
+/* 5分類マスタ：27分類→5分類（監査/コンサル/資産税/その他/システム）。
+   日報区分と請求区分の双方をこの5分類に紐づけて集計する。
+   M.bcGroup5 で業務分類マスタ画面から編集可能にする。 */
+const BC_GROUP_ORDER = ['監査','コンサル','資産税','システム','その他'];
 const BC_GROUP = {
-  '監査':['監査報酬','巡回監査決算料','年一関与決算料','年末調整計算料','個人確定申告報酬'],
-  'コンサル':['月次コンサル','その他コンサル','M&A','システムコンサル','システム立ち上げ','（シス）経理代行','（シス）給与代行','（シス）その他報酬','コンサルティング業務委託報酬','モニタリング費','経営力向上計画の新規申請','経営力向上計画の変更申請'],
+  '監査':['監査報酬','巡回監査決算料','年一関与決算料','税務相談料'],
+  'コンサル':['月次コンサル','その他コンサル','M&A','コンサルティング業務委託報酬','モニタリング費','経営力向上計画の新規申請','経営力向上計画の変更申請'],
   '資産税':['相続税申告報酬','相続税試算報酬','株式評価報酬','（資）贈与税申告報酬','（資）所得税申告報酬','（資）その他報酬'],
-  'その他':['システムレンタル料','B事務所シスサポ','紹介料','税務相談料','その他'],
+  'システム':['システムレンタル料','システム立ち上げ','システムコンサル','（シス）経理代行','（シス）給与代行','（シス）その他報酬','B事務所シスサポ'],
+  'その他':['年末調整計算料','個人確定申告報酬','紹介料','その他'],
 };
-const BC_GROUP_COLOR = {'監査':'#3a5a8c','コンサル':'#2f8762','資産税':'#8a5aa0','その他':'#8a6a3f'};
-function bcGroupOf(bc){ for(const g in BC_GROUP) if(BC_GROUP[g].includes(bc)) return g; return 'その他'; }
+const BC_GROUP_COLOR = {'監査':'#3a5a8c','コンサル':'#2f8762','資産税':'#8a5aa0','システム':'#1b7a9c','その他':'#8a6a3f'};
+function bcGroupOf(bc){
+  if(M.bcGroup5 && M.bcGroup5[bc]) return M.bcGroup5[bc];
+  for(const g in BC_GROUP) if(BC_GROUP[g].includes(bc)) return g;
+  return 'その他';
+}
 /* コンサル報酬を含むかの判定ヘルパ（従業員 or 関与先の byBc から） */
-function byBcHasConsul(byBc){ if(!byBc) return false; return BC_GROUP['コンサル'].some(bc=>byBc[bc]); }
+function byBcHasConsul(byBc){ if(!byBc) return false; return Object.keys(byBc).some(bc=>bcGroupOf(bc)==='コンサル'); }
 function hasConsulE(e){ return !!(e && byBcHasConsul(e.byBc)); }
 function hasConsulClient(name){
   if(!name) return false;
@@ -883,11 +900,18 @@ VIEWS.dashboard = ()=>{
 </div>
     <div class="bar2">
       <div class="card"><div class="card-header"><h3 class="card-title">業務分類別 報酬 (上位8)</h3></div><div class="card-body" style="padding:.5rem 1rem .9rem">
-        <table class="data-table" style="font-size:.82rem"><thead><tr><th>業務分類</th><th class="num">報酬</th><th class="num">構成比</th></tr></thead><tbody>
-        ${(()=>{ const items=Object.entries(T.byBc).sort((a,b)=>b[1]-a[1]).slice(0,8); const sumAll=Object.values(T.byBc).reduce((s,v)=>s+v,0)||1;
-          return items.map(([k,v])=>`<tr><td><a class="clickable" onclick="openBcClients('${esc(k).replace(/'/g,"\\'")}')">${esc(k)}</a></td><td class="num">${yen(v)}</td><td class="num subtitle">${(v/sumAll*100).toFixed(1)}%</td></tr>`).join('');
+        ${(()=>{
+          const sumAll=Object.values(T.byBc).reduce((s,v)=>s+v,0)||1;
+          const g5={}; Object.entries(T.byBc).forEach(([bc,v])=>{ const g=bcGroupOf(bc); g5[g]=(g5[g]||0)+v; });
+          const stacks = BC_GROUP_ORDER.filter(g=>g5[g]).map(g=>({g:g,v:g5[g],pct:g5[g]/sumAll*100,color:BC_GROUP_COLOR[g]}));
+          const stackHtml = `<div style="display:flex;height:1.3rem;border-radius:4px;overflow:hidden;background:#eef1f5;margin-bottom:.35rem">${stacks.map(s=>`<div title="${s.g} ${yen(s.v)}（${s.pct.toFixed(1)}%）" style="width:${s.pct}%;background:${s.color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:.7rem;font-weight:700">${s.pct>=6?s.g+' '+s.pct.toFixed(0)+'%':''}</div>`).join('')}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;margin-bottom:.6rem;font-size:.72rem">${stacks.map(s=>`<span style="display:inline-flex;align-items:center;gap:.3rem"><i style="display:inline-block;width:9px;height:9px;background:${s.color};border-radius:2px"></i>${s.g} ${s.pct.toFixed(1)}%（${yen(s.v)}）</span>`).join('')}</div>`;
+          const items=Object.entries(T.byBc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+          const tbl = `<table class="data-table" style="font-size:.82rem"><thead><tr><th>業務分類</th><th>5分類</th><th class="num">報酬</th><th class="num">構成比</th></tr></thead><tbody>
+            ${items.map(([k,v])=>{const g=bcGroupOf(k); return `<tr><td><a class="clickable" onclick="openBcClients('${esc(k).replace(/'/g,"\\'")}')">${esc(k)}</a></td><td><span style="display:inline-block;font-size:.65rem;color:#fff;background:${BC_GROUP_COLOR[g]};border-radius:3px;padding:1px 6px;font-weight:700">${g}</span></td><td class="num">${yen(v)}</td><td class="num subtitle">${(v/sumAll*100).toFixed(1)}%</td></tr>`;}).join('')}
+            </tbody></table>`;
+          return stackHtml + tbl;
         })()}
-        </tbody></table>
       </div></div>
       <div class="card"><div class="card-header"><h3 class="card-title">取込サマリー（${pLabel(PERIOD)}）</h3></div><div class="card-body">
         <div class="tiles">
@@ -997,7 +1021,7 @@ VIEWS['my-performance'] = ()=>{
       <div class="hrow"><span class="k">${e.office}オフィス平均（${avg.n}名）</span><span class="v">${yen(Math.round(avg.prodDir))} / 時間</span></div>
       <div class="hrow"><span class="k">中央値</span><span class="v">${avg.prodMedian?yen(avg.prodMedian)+' / 時間':'-'}</span></div>
       <div class="hrow"><span class="k">平均との差</span><span class="v">${prodRel==null?'-':`<span class="${prodRel>=0?'delta-up':'delta-down'}" style="padding:2px 8px;border-radius:4px">${prodRel>=0?'+':''}${prodRel.toFixed(1)}%</span>`}</span></div>
-      <div class="hrow"><span class="k">計画額を満たすのに必要な時間単価</span><span class="v" style="color:var(--intent-color);font-weight:700">${needRate?yen(needRate)+' / 時間':'-'}</span></div>
+      <div class="hrow"><span class="k">計画額を満たすのに必要な時間単価</span><span class="v">${needRate?yen(needRate)+' / 時間':'-'}</span></div>
       <div style="margin-top:.9rem">
         <div class="cmp-bar" style="height:1.6rem">
           <i style="width:${e.prodDir&&avg.prodDir?Math.min(100,e.prodDir/(avg.prodDir*2)*100):0}%;background:var(--intent-color)"></i>
@@ -1037,8 +1061,14 @@ VIEWS['my-performance'] = ()=>{
     <div class="card"><div class="card-header"><h3 class="card-title">担当関与先の変更（前月との差分）</h3></div><div class="card-body">
       ${rmv.length?`<div class="note note-warn"><b>他の担当者へ移った関与先 ${rmv.length}件</b>（${pLabel(prevPeriod(PERIOD))}はあなた、${pLabel(PERIOD)}は別の担当者で請求）。当月の実績・件数はブランクになり、履歴は残ります。<br>
       ${rmv.map(c=>`<span class="pill status-warning" style="margin:.2rem">${esc(c.name)}（${esc(c.code)}／前月 ${yen(c.prevAmount)}${c.to.length?' → '+esc(c.to.join('・')):''}）</span>`).join('')}</div>`:''}
-      ${add.length?`<div class="note" style="margin-top:.6rem"><b>今月から自分の担当になった関与先 ${add.length}件</b>。今月から集計に加わります。<br>
-      ${add.map(c=>`<span class="pill status-info" style="margin:.2rem">${esc(c.name)}（${esc(c.code)}／${yen(c.amount)}${c.from.length?'　前任：'+esc(c.from.join('・')):''}）</span>`).join('')}</div>`:''}
+      ${(()=>{ const neo=add.filter(c=>c.isNew), hd=add.filter(c=>!c.isNew);
+        let html='';
+        if(neo.length) html += `<div class="note" style="margin-top:.6rem"><b>新規関与先 ${neo.length}件</b>（前月に請求実績なし）。今月から集計に加わります。<br>
+          ${neo.map(c=>`<span class="pill status-valid" style="margin:.2rem">${esc(c.name)}（${esc(c.code)}／${yen(c.amount)}）</span>`).join('')}</div>`;
+        if(hd.length) html += `<div class="note note-warn" style="margin-top:.6rem"><b>引継ぎ関与先 ${hd.length}件</b>（前任者から今月引継ぎ）。今月から集計に加わります。<br>
+          ${hd.map(c=>`<span class="pill status-warning" style="margin:.2rem">${esc(c.name)}（${esc(c.code)}／${yen(c.amount)}　前任：${esc(c.from.join('・'))}）</span>`).join('')}</div>`;
+        return html;
+      })()}
       ${gne.length?`<details style="margin-top:.6rem"><summary style="cursor:pointer;font-size:.82rem;color:var(--accent-color)">当月の請求がなかった関与先 ${gne.length}件（年一関与など請求サイクルの可能性）</summary>
       <div style="padding:.5rem 0">${gne.map(c=>`<span class="pill status-neutral" style="margin:.2rem">${esc(c.name)}（${esc(c.code)}／前月 ${yen(c.prevAmount)}）</span>`).join('')}</div></details>`:''}
       <p class="subtitle" style="margin-top:.6rem">当月取込と前月取込を突合して自動検出しています。内容に心当たりがない場合は管理者へご連絡ください。</p>
@@ -1245,10 +1275,14 @@ VIEWS.tkc = ()=>{
     <div class="note">TKC利用サービスは<b>最新状態のみで月の概念がありません</b>。最新スナップショット（202609時点・${num(rows.length)}関与先）として保持しています。</div>
     <div class="toolbar"><label>担当者</label><select onchange="state.tkcEmp=this.value;render()"><option value="">全担当者</option>${emps.map(e=>`<option ${e===f?'selected':''}>${esc(e)}</option>`).join('')}</select>
       <span style="flex:1"></span><span class="record-count">提案チャンス（導入1件以下）：${num(chance.length)}件</span></div>
-    <div class="card"><div class="card-header"><h3 class="card-title">関与先×サービス マトリクス（導入数の少ない順・上位400件）</h3></div><div class="scroll-x"><table class="data-table"><thead><tr><th>関与先</th><th>担当者</th><th>決算月</th>${TKC_SVC.map(s=>`<th style="text-align:center">${esc(s)}</th>`).join('')}<th class="num">導入数</th></tr></thead><tbody>
-    ${shown.map(r=>`<tr id="tkc-row-${esc(r.office)}-${esc(r.code)}" ${r.count<=1?'style="background:#fdeef0"':''}><td>${esc(r.name)}</td><td>${esc(r.emp)||'-'}</td><td class="subtitle">${esc(r.kessan)}</td>${r.svc.map(v=>`<td style="text-align:center;font-weight:700;color:${v?'var(--success-color)':'#ced4da'}">${v?'✔':'−'}</td>`).join('')}<td class="num">${r.count}/${TKC_SVC.length}</td></tr>`).join('')}
+    <div class="card"><div class="card-header"><h3 class="card-title">関与先×サービス マトリクス（導入数の少ない順・上位400件）</h3><span class="record-count">チャンス：${num(chance.length)}件</span></div><div class="scroll-x"><table class="data-table"><thead><tr><th>関与先</th><th>担当者</th><th>決算月</th>${TKC_SVC.map(s=>`<th style="text-align:center">${esc(s)}</th>`).join('')}<th class="num">導入数</th><th>提案</th></tr></thead><tbody>
+    ${shown.map(r=>{
+      const rowBg = r.count===0?'background:#fdeef0':(r.count<=1?'background:#fff8ec':'');
+      const chip = r.count===0?'<span class="status-badge status-error">未導入（最優先）</span>':(r.count<=1?'<span class="status-badge status-warning">提案チャンス</span>':'<span class="subtitle" style="font-size:.7rem">—</span>');
+      return `<tr id="tkc-row-${esc(r.office)}-${esc(r.code)}" style="${rowBg}"><td>${esc(r.name)}</td><td>${esc(r.emp)||'-'}</td><td class="subtitle">${esc(r.kessan)}</td>${r.svc.map(v=>`<td style="text-align:center;font-weight:700;color:${v?'var(--success-color)':'#b8860b'};background:${v?'transparent':'#fffbe6'}">${v?'✔':'未'}</td>`).join('')}<td class="num">${r.count}/${TKC_SVC.length}</td><td>${chip}</td></tr>`;
+    }).join('')}
     </tbody></table></div></div>
-    <div class="note">ピンク行＝導入1件以下の提案チャンス。</div>
+    <div class="note">黄色セル＝未導入サービス（提案チャンス）。赤行＝導入ゼロ（最優先）、黄行＝導入1件以下。</div>
 </div>`;
   if(state.tkcFocus){
     const [fo,fc]=state.tkcFocus.split('|');
@@ -1270,6 +1304,128 @@ window.focusTkc=(office,code)=>{
   if(rec && rec.emp) state.tkcEmp=rec.emp;
   state.tkcFocus=office+'|'+code;
   openTab('tkc');
+};
+
+/* ---------- 関与先別 時間・生産性（管理者＋リーダー） ---------- */
+function clientProductivityData(){
+  // 全期間を対象にロールアップ。本来は「直近12か月ローリング」だが、現状3ヶ月データのため取込済み全月で代替。
+  const idx = {}; // key = office|clientCode|name
+  const nameToId = {}; Object.keys(DATA.id2name||{}).forEach(k=>{ nameToId[DATA.id2name[k]]=k; });
+  PERIODS.forEach(p=>{
+    const md=MD(p);
+    md.lines.forEach(l=>{
+      const code=mapClientCode(l.office,l.clientCode);
+      const key=l.office+'|'+code+'|'+l.client;
+      const r = idx[key] = idx[key] || {office:l.office,code:code,name:l.client,fee:0,byG5:{},empFee:{},empHours:{},hoursDirect:0};
+      const amt=effAmount(l), bc=effBc(l), g=bcGroupOf(bc);
+      r.fee += amt;
+      r.byG5[g] = (r.byG5[g]||0) + amt;
+      const emp = effEmp(l);
+      r.empFee[emp] = (r.empFee[emp]||0) + amt;
+    });
+    (md.consulLines||[]).forEach(t=>{
+      if(!t.empResolved) return;
+      const key='A事務所|'+(t.code||'—')+'|'+t.client;
+      const r = idx[key] = idx[key] || {office:'A事務所',code:(t.code||'—'),name:t.client,fee:0,byG5:{},empFee:{},empHours:{},hoursDirect:0};
+      const g=bcGroupOf(t.bc);
+      r.fee += t.amount;
+      r.byG5[g] = (r.byG5[g]||0) + t.amount;
+      r.empFee[t.emp] = (r.empFee[t.emp]||0) + t.amount;
+    });
+    // 日報から直接時間を関与先に合算
+    (md.nippo||[]).forEach(row=>{
+      // row = [kid, date, clientName, code, bc, hours, direct]
+      if(!row[6]) return;              // 直接のみ
+      const empName = (DATA.id2name||{})[row[0]] || row[0];
+      const cname = row[2]; if(!cname) return;
+      // 関与先名でマッチ（office/codeは日報に無いので名前ベース）
+      Object.keys(idx).forEach(k=>{ if(idx[k].name===cname){ idx[k].hoursDirect += row[5]; idx[k].empHours[empName]=(idx[k].empHours[empName]||0)+row[5]; } });
+    });
+  });
+  // 行列化＋単価・主担当者
+  const rows = Object.values(idx).map(r=>{
+    const rate = r.hoursDirect ? Math.round(r.fee/r.hoursDirect) : null;
+    const primaryEmp = Object.entries(r.empFee).sort((a,b)=>b[1]-a[1])[0];
+    return {...r, rate:rate, primaryEmp: primaryEmp?primaryEmp[0]:'—'};
+  }).filter(r=>r.fee>0);
+  // 異常値判定：単価が全体の中央値から大きく外れる or 直接時間が0 or 月150h超
+  const rates = rows.map(r=>r.rate).filter(x=>x!=null).sort((a,b)=>a-b);
+  const med = rates.length ? rates[Math.floor(rates.length/2)] : null;
+  const avgMo = PERIODS.length;
+  rows.forEach(r=>{
+    const anomalies = [];
+    if(r.hoursDirect === 0 && r.fee > 0) anomalies.push('時間0h');
+    if(r.hoursDirect/avgMo > 150) anomalies.push('時間過剰');
+    if(med && r.rate){
+      if(r.rate < med*0.3) anomalies.push('単価が低い');
+      else if(r.rate > med*3) anomalies.push('単価が高い');
+    }
+    r.anomalies = anomalies;
+  });
+  return {rows:rows, median:med};
+}
+VIEWS['client-productivity'] = ()=>{
+  if(ROLE!=='ADMIN' && ROLE!=='LEADER'){
+    $view().innerHTML=`<div class="page-wrap"><div class="note note-warn">「関与先別 時間・生産性」は<b>管理者またはリーダー</b>のみご覧いただけます。</div></div>`;
+    return;
+  }
+  if(!state.cpF) state.cpF = {q:'',g5:'',emp:'',minFee:'',maxRate:''};
+  const f = state.cpF;
+  const {rows,median} = clientProductivityData();
+  const allEmps = [...new Set(rows.map(r=>r.primaryEmp))].sort();
+  // 絞り込み
+  let shown = rows.filter(r=>{
+    if(f.q && !r.name.includes(f.q)) return false;
+    if(f.g5){ const top=Object.entries(r.byG5).sort((a,b)=>b[1]-a[1])[0]; if(!top || top[0]!==f.g5) return false; }
+    if(f.emp && r.primaryEmp!==f.emp) return false;
+    if(f.minFee && r.fee < Number(f.minFee)*10000) return false;
+    if(f.maxRate && r.rate!=null && r.rate > Number(f.maxRate)) return false;
+    return true;
+  }).sort((a,b)=>b.fee-a.fee);
+  const totalFee = shown.reduce((s,r)=>s+r.fee,0);
+  const totalHrs = shown.reduce((s,r)=>s+r.hoursDirect,0);
+  const anomCount = shown.filter(r=>r.anomalies.length).length;
+  $view().innerHTML = `
+  <div class="page-wrap">
+    <div class="note">この画面は<b>評価に直結しません。</b>関与先ごとの気づき（単価の偏り・時間の付け方の乖離）を発見するための分析ツールです。異常値の目印は「調整が入ったのではないか」ではなく「要確認」の候補です。元データ：請求実績＋TKC日報（直接時間のみ合算、担当者問わず）。</div>
+    <div class="toolbar">
+      <label>関与先検索</label><input value="${esc(f.q)}" placeholder="関与先名" oninput="state.cpF.q=this.value;render()">
+      <label>主な5分類</label><select onchange="state.cpF.g5=this.value;render()"><option value="">全て</option>${BC_GROUP_ORDER.map(g=>`<option value="${g}" ${f.g5===g?'selected':''}>${g}</option>`).join('')}</select>
+      <label>主担当者</label><select onchange="state.cpF.emp=this.value;render()"><option value="">全て</option>${allEmps.map(e=>`<option value="${esc(e)}" ${f.emp===e?'selected':''}>${esc(e)}</option>`).join('')}</select>
+      <label>報酬下限(万円)</label><input type="number" value="${esc(f.minFee)}" style="width:90px" oninput="state.cpF.minFee=this.value;render()">
+      <label>単価上限(円/h)</label><input type="number" value="${esc(f.maxRate)}" style="width:100px" oninput="state.cpF.maxRate=this.value;render()">
+      <span style="flex:1"></span><span class="record-count">${num(shown.length)}件 / 合計 ${yen(totalFee)} / ${num(Math.round(totalHrs))}h</span>
+    </div>
+    <div class="kpi-card-grid">
+      ${kpi('対象関与先',num(shown.length)+'件','絞り込み後')}
+      ${kpi('合計 直接時間',num(Math.round(totalHrs))+'h','担当者問わず合算')}
+      ${kpi('時間単価 中央値',median?yen(median)+' / h':'-','全関与先の中央値')}
+      ${kpi('要確認',num(anomCount)+'件','異常値マーク付き')}
+    </div>
+    <div class="card"><div class="card-header"><h3 class="card-title">関与先一覧（期間：取込済み${PERIODS.length}ヶ月の集計）</h3><span class="record-count">${shown.length}件</span></div>
+      <div class="table-wrapper"><table class="data-table"><thead><tr>
+        <th>ｵﾌｨｽ</th><th>関与先</th><th>主担当者</th><th>主な5分類</th><th class="num">報酬</th><th class="num">直接時間</th><th class="num">時間単価</th><th>要確認</th>
+      </tr></thead><tbody>
+      ${shown.slice(0,200).map(r=>{
+        const top5 = Object.entries(r.byG5).sort((a,b)=>b[1]-a[1])[0];
+        const g = top5?top5[0]:'—';
+        const anom = r.anomalies.length ? `<span class="status-badge status-error">${r.anomalies.join('・')}</span>` : '<span class="subtitle">—</span>';
+        return `<tr${r.anomalies.length?' style="background:#fff7f7"':''}>
+          <td>${esc(r.office)}</td>
+          <td>${esc(r.name)}<span class="subtitle" style="font-size:.7rem">（${esc(r.code)}）</span></td>
+          <td>${esc(r.primaryEmp)}</td>
+          <td><span style="display:inline-block;font-size:.65rem;color:#fff;background:${BC_GROUP_COLOR[g]||'#8a6a3f'};border-radius:3px;padding:1px 6px;font-weight:700">${g}</span></td>
+          <td class="num">${yen(r.fee)}</td>
+          <td class="num">${r.hoursDirect?num(Math.round(r.hoursDirect))+'h':'<span style="color:#dee2e6">—</span>'}</td>
+          <td class="num">${r.rate!=null?yen(r.rate)+'/h':'<span style="color:#dee2e6">—</span>'}</td>
+          <td>${anom}</td>
+        </tr>`;
+      }).join('')||'<tr><td colspan=8 style="text-align:center">該当なし</td></tr>'}
+      </tbody></table></div>
+      ${shown.length>200?`<div class="card-body subtitle">上位200件を表示（全${num(shown.length)}件）</div>`:''}
+    </div>
+    <div class="note">単価は<b>関与先に紐づく全担当者の直接時間</b>を分母に取ります（担当者問わず合算）。異常値：単価が中央値の0.3倍以下または3倍以上／月平均150h超／報酬ありなのに直接時間0h。グループ（親組織）単位の集計は顧客マスタに「親グループ」列を追加後に対応予定。将来：AIチャットで「○円以上の関与先を出して」の問い合わせ対応。</div>
+  </div>`;
 };
 
 /* ---------- TKC日報連携（CSV） ---------- */
@@ -1346,13 +1502,13 @@ VIEWS.reassign = ()=>{
   const empsAffected=[...new Set([...Object.keys(ra.moved),...Object.keys(ra.added)])];
   $view().innerHTML=`<div class="page-wrap">
     <p class="subtitle">${pLabel(ra.prev)}の取込と${pLabel(PERIOD)}の取込を突合し、<b>関与先の担当者変更を自動検出</b>します。突合されない担当替えは実績の付け替え漏れにつながるため、担当者本人の確認画面にも表示します。</p>
-    <div class="note">判定の区分：<b>移管</b>＝前月・当月とも請求があり担当者が入れ替わった（真の担当変更）／<b>新規</b>＝当月から請求が発生／<b>当月請求なし</b>＝前月にあり当月に請求がない（年一関与など請求サイクルの可能性があるため、担当変更とは別に表示）。<br>
+    <div class="note">判定の区分：<b>移管</b>＝前月・当月とも請求があり担当者が入れ替わった（真の担当変更）／<b>新規</b>＝当月から請求が発生（前月にその関与先の請求実績なし）／<b>引継ぎ</b>＝前月は別の担当者が請求していた関与先を今月から引継ぎ／<b>当月請求なし</b>＝前月にあり当月に請求がない（年一関与など請求サイクルの可能性があるため、担当変更とは別に表示）。<br>
     <span class="subtitle">※ 本来はTKC_CDBの担当者を月次スナップショットで差分比較します。現在TKC_CDBは最新1本のみのご提供のため、FMS請求実績の担当者で代替しています。月次スナップショットをいただければ精度が上がります。</span></div>
     <div class="kpi-card-grid">
       ${kpi('担当変更（移管）',num(ra.nMoved)+'件',pLabel(ra.prev)+' → '+pLabel(PERIOD))}
-      ${kpi('新規に担当',num(ra.nNew)+'件','後任者は当月から集計')}
+      ${kpi('新規に担当',num(ra.nNew)+'件','前月に請求実績なし')}
+      ${kpi('引継ぎ',num(ra.nHandover)+'件','前任者から引継ぎ')}
       ${kpi('当月請求なし',num(ra.nGone)+'件','請求サイクルの可能性・要確認')}
-      ${kpi('対象担当者',num(empsAffected.length)+'名','本人画面に通知')}
 </div>
     <div class="card"><div class="card-header"><h3 class="card-title">検出一覧</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>区分</th><th>ｵﾌｨｽ</th><th>関与先CD</th><th>関与先</th><th>前月の担当</th><th>当月の担当</th><th class="num">前月実績</th><th>要確認の理由</th></tr></thead><tbody>
     ${ra.rows.map(r=>{
@@ -1363,14 +1519,15 @@ VIEWS.reassign = ()=>{
         const sel=`<select class="form-select" style="min-height:auto;padding:.2rem" onchange="setReassignReason('${esc(key)}',this.value)">${reasons.map(x=>`<option value="${x==='（未選択）'?'':esc(x)}" ${reason===(x==='（未選択）'?'':x)?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
         return `<tr><td><span class="status-badge status-neutral">${r.kind}</span></td><td>${esc(r.office)}</td><td>${esc(r.code)}</td><td>${esc(r.client)}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td><td class="num">${yen(r.prevAmount)}</td><td>${sel}${reason?' <span class="status-badge status-valid">記録済</span>':''}</td></tr>`;
       }
-      return `<tr><td><span class="status-badge ${r.kind==='移管'?'status-info':'status-valid'}">${r.kind}</span></td><td>${esc(r.office)}</td><td>${esc(r.code)}</td><td>${esc(r.client)}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td><td class="num">${yen(r.prevAmount)}</td><td><span class="status-badge status-valid">自動反映済み</span></td></tr>`;
+      const kindCls = r.kind==='移管'?'status-info':(r.kind==='引継ぎ'?'status-warning':'status-valid');
+      return `<tr><td><span class="status-badge ${kindCls}">${r.kind}</span></td><td>${esc(r.office)}</td><td>${esc(r.code)}</td><td>${esc(r.client)}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td><td class="num">${yen(r.prevAmount)}</td><td><span class="status-badge status-valid">自動反映済み</span></td></tr>`;
     }).join('')||'<tr><td colspan=8 style="text-align:center">変更なし</td></tr>'}
     </tbody></table></div>
     <div class="card-body subtitle">「当月請求なし」の行は理由（解約・年次・スポット等）をドロップダウンで選択できます。選択結果は締め処理後も保持し、翌月以降の判定にも活用します。別アプリに上がっている解約連絡との連携は将来対応（スコープ外）。</div></div>
     <div class="card"><div class="card-header"><h3 class="card-title">担当者別の通知内容</h3></div><div class="card-body">
     ${empsAffected.map(e=>`<div class="hrow"><span class="k">${esc(e)}</span><span class="v" style="font-weight:500;font-size:.82rem">
       ${(ra.moved[e]||[]).length?`<span class="status-badge status-warning">移管 ${ra.moved[e].length}件</span> `:''}
-      ${(ra.added[e]||[]).length?`<span class="status-badge status-valid">新規 ${ra.added[e].length}件</span> `:''}
+      ${(()=>{const a=ra.added[e]||[]; const n=a.filter(c=>c.isNew).length, h=a.filter(c=>!c.isNew).length; return (n?`<span class="status-badge status-valid">新規 ${n}件</span> `:'')+(h?`<span class="status-badge status-warning">引継ぎ ${h}件</span> `:'');})()}
       <a class="clickable" onclick="openTab('staff-close',{closeEmp:'${esc(e)}'})">確認画面を開く</a></span></div>`).join('')||'<p class="subtitle">対象者なし</p>'}
 </div></div>
     <div class="note">仕様：担当者が入れ替わった関与先 → 前任者に<b>無効フラグ</b>を立て、当月の報酬・件数はブランク（履歴は保持）。後任者は<b>当月から</b>計上。10月の年次更新で無効フラグの関与先は翌期の画面から消えます。</div>
@@ -1388,6 +1545,21 @@ function empConfirmStats(emp){
   if(!e) return {done:0,total:0};
   return {done:e.clients.filter(c=>state.rowConfirm[empRowKey(emp,c.code)]).length,total:e.clients.length};
 }
+/* 月次確認の提出締切：対象月の翌月3日 */
+function closeDeadline(period){
+  const y=Number(period.slice(0,4)), m=Number(period.slice(5,7));
+  const d = new Date(m===12?y+1:y, m===12?0:m, 3);  // 翌月3日
+  return d;
+}
+function closeDeadlineLabel(period){
+  const d=closeDeadline(period);
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+}
+function isOverdue(period){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  return today > closeDeadline(period);
+}
 VIEWS['staff-close'] = ()=>{
   const emp=confirmTargetEmp();
   const e=empOf(PERIOD,emp)||A().employees[0];
@@ -1398,16 +1570,22 @@ VIEWS['staff-close'] = ()=>{
   const opts=A().employees.map(x=>`<option ${x.name===emp?'selected':''}>${esc(x.name)}</option>`).join('');
   const ra=reassignments(PERIOD);
   const rmv=ra&&ra.moved[emp]?ra.moved[emp]:[], add=ra&&ra.added[emp]?ra.added[emp]:[], gne=ra&&ra.gone[emp]?ra.gone[emp]:[];
+  const overdue = isOverdue(PERIOD) && !submitted;
   $view().innerHTML=`<div class="page-wrap">
     <p class="subtitle">月次締めの前に、担当者が<b>自分の担当関与先の内容</b>（報酬・業務分類・件数・日報時間）と<b>担当変更</b>を確認します。全件確認後に提出すると、管理者が締め処理を実行できます。</p>
     <div class="toolbar">
       <label>担当者</label>${ROLE==='ADMIN'?`<select onchange="state.closeEmp=this.value;render()">${opts}</select>`:`<span class="pill status-neutral">${esc(emp)}（ログイン中）</span>`}
       <span class="pill status-neutral">${e.office}オフィス</span><span style="flex:1"></span>
       <span class="subtitle">対象：${pLabel(PERIOD)}</span>
+      <span class="status-badge ${overdue?'status-error':submitted?'status-valid':'status-warning'}" style="margin-left:.4rem">提出期限 ${closeDeadlineLabel(PERIOD)}${overdue?' 【期限超過】':''}</span>
 </div>
     ${rmv.length||add.length||gne.length?`<div class="card"><div class="card-header"><h3 class="card-title">担当の変更（前月比）— 必ずご確認ください</h3></div><div class="card-body">
       ${rmv.length?`<div class="note note-warn"><b>他の担当者へ移った関与先 ${rmv.length}件</b>：${rmv.map(c=>esc(c.name)+'（'+esc(c.code)+'）'+(c.to.length?' → '+esc(c.to.join('・')):'')).join(' ／ ')}<br>当月の実績・件数はブランクになります。心当たりがない場合は管理者へご連絡ください。</div>`:''}
-      ${add.length?`<div class="note" style="margin-top:.6rem"><b>今月からあなたの担当になった関与先 ${add.length}件</b>：${add.map(c=>esc(c.name)+'（'+esc(c.code)+'）'+(c.from.length?'（前任：'+esc(c.from.join('・'))+'）':'')).join(' ／ ')}</div>`:''}
+      ${(()=>{ const neo=add.filter(c=>c.isNew), hd=add.filter(c=>!c.isNew); let html='';
+        if(neo.length) html += `<div class="note" style="margin-top:.6rem"><b>新規関与先 ${neo.length}件</b>（前月に請求実績なし）：${neo.map(c=>esc(c.name)+'（'+esc(c.code)+'）').join(' ／ ')}</div>`;
+        if(hd.length) html += `<div class="note note-warn" style="margin-top:.6rem"><b>引継ぎ関与先 ${hd.length}件</b>：${hd.map(c=>esc(c.name)+'（'+esc(c.code)+'）（前任：'+esc(c.from.join('・'))+'）').join(' ／ ')}</div>`;
+        return html;
+      })()}
       ${gne.length?`<div class="note" style="margin-top:.6rem"><b>当月の請求がなかった関与先 ${gne.length}件</b>（年一関与など請求サイクルの可能性があります）：${gne.slice(0,20).map(c=>esc(c.name)+'（'+esc(c.code)+'）').join(' ／ ')}${gne.length>20?' …他'+(gne.length-20)+'件':''}</div>`:''}
 </div></div>`:''}
     <div class="kpi-card-grid">
@@ -1492,6 +1670,12 @@ VIEWS.team = ()=>{
 };
 
 /* ---------- データ取込（/16） ---------- */
+window.pseudoImport=(key,el)=>{
+  const f = el && el.files && el.files[0];
+  if(!f){ return; }
+  alert('取込ファイルを受け付けました：'+f.name+'（'+Math.round(f.size/1024)+'KB）\n\n※ デモ画面のため、実際の取込処理は本番環境で動作します。');
+  el.value='';
+};
 window.runImport=()=>{
   const un=MD(PERIOD).lines.filter(l=>effBc(l)==='未分類');
   if(un.length){
@@ -1508,34 +1692,63 @@ window.runImport=()=>{
 };
 VIEWS.imports = ()=>{
   const imp=A().import, T=A().totals;
-  const srcRows = [
-    ['FMS請求実績_A事務所（CSV手動取込）', imp.officeA_total, imp.officeA_tax_excluded, imp.lines_officeA, T.officeA],
-    ['FMS請求実績_B事務所（CSV手動取込）', imp.officeB_total, imp.officeB_tax_excluded, imp.lines_officeB, T.officeB],
-    ['資産税 (kintone API)', MD(PERIOD).teamLines.length, 0, MD(PERIOD).teamLines.length, T.teamShisan],
-    ['コンサル①② (kintone API)', MD(PERIOD).consulLines.length, 0, MD(PERIOD).consulLines.length, T.consul],
-  ].map(r=>`<tr><td>${r[0]}</td><td class="num">${num(r[1])}</td><td class="num">${num(r[2])}</td><td class="num">${num(r[3])}</td><td class="num">${yen(r[4])}</td><td><span class="status-badge status-valid">一致</span></td></tr>`).join('');
+  const sources = [
+    {key:'officeA',    label:'FMS請求実績（A事務所）',  accept:'.csv', raw:imp.officeA_total,    tax:imp.officeA_tax_excluded,    ok:imp.lines_officeA,    amt:T.officeA,     hint:'FMSから月次エクスポートしたCSV'},
+    {key:'officeB',  label:'FMS請求実績（B事務所）',  accept:'.csv', raw:imp.officeB_total,  tax:imp.officeB_tax_excluded,  ok:imp.lines_officeB,  amt:T.officeB,   hint:'FMS（KCT含む）から月次エクスポートしたCSV'},
+    {key:'shisan',     label:'資産税請求（kintone）',accept:'.csv', raw:MD(PERIOD).teamLines.length,    tax:0, ok:MD(PERIOD).teamLines.length,    amt:T.teamShisan,  hint:'資産税アプリの請求データCSV'},
+    {key:'consul',     label:'コンサル請求（kintone）',accept:'.csv',raw:MD(PERIOD).consulLines.length,  tax:0, ok:MD(PERIOD).consulLines.length,  amt:T.consul,      hint:'税理士法人請求管理＋コンサル請求管理の2アプリ'},
+    {key:'nippo',      label:'業務日報（TKC CSV）',  accept:'.csv', raw:(MD(PERIOD).nippo||[]).length,  tax:0, ok:(MD(PERIOD).nippo||[]).length,  amt:null,          hint:'TKC日報を月次エクスポートしたCSV'},
+  ];
+  const skippedTotal = imp.skipped.length;
+  const unmatchedTotal = imp.unmatched.length;
+  const succeeded = sources.reduce((s,x)=>s+(x.ok||0),0);
+  const failed = skippedTotal;
+  const warn = unmatchedTotal;
+  const totalFee = T.all;
+  const srcSumFee = sources.reduce((s,x)=>s+(x.amt||0),0);
+  const diffFee = totalFee - srcSumFee;
+  const matched = Math.abs(diffFee) < 1;
   const unmatchedTrend=PERIODS.map(p=>({p:p,v:agg(p).import.unmatched.length}));
+  const zones = sources.map(s=>`
+    <div class="drop-zone" style="border:2px dashed #cfd8e5;border-radius:8px;padding:1rem;background:#fbfcfe;display:flex;flex-direction:column;gap:.4rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem">
+        <span style="font-weight:700">${esc(s.label)}</span>
+        <span class="status-badge ${s.ok?'status-valid':'status-neutral'}">${s.ok?'取込済 '+num(s.ok)+'件':'未取込'}</span>
+      </div>
+      <div class="subtitle" style="font-size:.72rem">${esc(s.hint)}</div>
+      <label class="btn btn-outline btn-sm" style="cursor:pointer;text-align:center">
+        CSVファイルを選択（${s.accept}）
+        <input type="file" accept="${s.accept}" style="display:none" onchange="pseudoImport('${s.key}',this)">
+      </label>
+      ${s.amt!=null?`<div class="hrow" style="padding:.25rem 0;font-size:.78rem"><span class="k">請求額合計</span><span class="v">${yen(s.amt)}</span></div>`:''}
+    </div>`).join('');
   $view().innerHTML=`
   <div class="page-wrap">
-    <p class="subtitle">${pLabel(PERIOD)}データ取込。空白スキップ・紐づけエラー・業務分類漏れ・金額突合を取込時にチェックします。</p>
-    <div class="toolbar"><label>取込月</label><select onchange="setPeriod(this.value)">${PERIODS.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${p}</option>`).join('')}</select>
+    <p class="subtitle">${pLabel(PERIOD)}データ取込。<b>API連携は使わず、データ種別ごとにCSVをアップロード</b>します。取込時に空白スキップ・紐づけエラー・業務分類漏れ・金額突合をチェックします。</p>
+    <div class="toolbar">
+      <label>取込月</label><select onchange="setPeriod(this.value)">${PERIODS.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${p}</option>`).join('')}</select>
       <button class="btn btn-primary btn-sm" onclick="runImport()">取込実行（上書き）</button>
       <span class="subtitle">同月再取込は自動上書き（重複チェック）／連携頻度は請求確定後の月1回</span>
-</div>
+    </div>
     <div class="kpi-card-grid">
-      ${kpi('取込対象 総行数',num(imp.officeA_total+imp.officeB_total),'A事務所+B事務所 生データ')}
-      ${kpi('消費税レコード除外',num(imp.officeA_tax_excluded+imp.officeB_tax_excluded),'取込対象外')}
-      ${kpi('スキップ行',num(imp.skipped.length),'関与先/担当者 空白')}
-      ${kpi('未分類 警告',num(imp.unmatched.length),'業務分類できず')}
-</div>
+      ${kpi('取込成功',num(succeeded)+'件',sources.filter(s=>s.ok).length+' 種別')}
+      ${kpi('失敗（スキップ）',num(failed)+'件',failed?`<span style="color:var(--danger-color);font-weight:700">要確認</span>`:'OK')}
+      ${kpi('業務分類の不一致',num(warn)+'件',warn?'未分類あり':'OK')}
+      ${kpi('金額の照合',matched?'✔ 一致':'差額 '+yen(diffFee),matched?'元データ合計 = 集計合計':'差額が0でない場合は要確認')}
+    </div>
+    <div class="card"><div class="card-header"><h3 class="card-title">データ種別ごとのアップロード口</h3></div><div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.75rem">${zones}</div>
+      <div class="note" style="margin-top:.9rem">CSV は <code>.csv</code> / <code>.csv.gz</code> / <code>.zip</code> に対応予定（本番環境）。デモ版ではファイル選択時に取込成功のメッセージを表示します（実データはサーバー側で処理）。</div>
+    </div></div>
     <div class="bar2">
       <div class="card"><div class="card-header"><h3 class="card-title">金額突合（元データ合計 vs 集計結果）</h3></div>
-        <div class="table-wrapper"><table class="data-table"><thead><tr><th>データソース</th><th class="num">生行数</th><th class="num">消費税除外</th><th class="num">取込明細</th><th class="num">請求額合計</th><th>突合</th></tr></thead><tbody>${srcRows}
-        <tr style="background:#f8f9fa;font-weight:600"><td>合計</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">${yen(T.all)}</td><td><span class="status-badge status-valid">全件一致</span></td></tr>
+        <div class="table-wrapper"><table class="data-table"><thead><tr><th>データソース</th><th class="num">生行数</th><th class="num">消費税除外</th><th class="num">取込明細</th><th class="num">請求額合計</th><th>突合</th></tr></thead><tbody>
+        ${sources.map(s=>`<tr><td>${esc(s.label)}</td><td class="num">${num(s.raw)}</td><td class="num">${num(s.tax)}</td><td class="num">${num(s.ok)}</td><td class="num">${s.amt!=null?yen(s.amt):'-'}</td><td><span class="status-badge status-valid">一致</span></td></tr>`).join('')}
+        <tr style="background:#f8f9fa;font-weight:600"><td>合計</td><td class="num"></td><td class="num"></td><td class="num">${num(succeeded)}</td><td class="num">${yen(totalFee)}</td><td><span class="status-badge ${matched?'status-valid':'status-error'}">${matched?'全件一致':'差額あり'}</span></td></tr>
         </tbody></table></div>
-</div>
+      </div>
       ${trendCard('未分類レコード件数の推移',unmatchedTrend,v=>num(v)+'件',{foot:'マスタ登録が進めば0に近づきます'})}
-</div>
+    </div>
     <div class="card"><div class="card-header"><h3 class="card-title">業務分類できなかった請求レコード（要確認）</h3><span class="record-count">${imp.unmatched.length}件</span></div>
       <div class="card-body subtitle">各行で業務分類を選ぶと即時反映されます。「帰属」は個人／シスサポ集約を切替。</div>
       <div class="table-wrapper"><table class="data-table"><thead><tr><th>ソース</th><th>伝票</th><th>関与先</th><th>細目CD</th><th>報酬細目</th><th>業務分類（選択で反映）</th><th>帰属</th></tr></thead><tbody>
@@ -1619,9 +1832,12 @@ VIEWS['m-bc'] = ()=>{
     const sys=isSysBc(bc);
     const personal = !sys && !exp;
     const used = PERIODS.some(p=>(agg(p).totals.byBc[bc]||0)!==0);
+    const g5 = bcGroupOf(bc);
+    const g5Opts = BC_GROUP_ORDER.map(x=>`<option ${x===g5?'selected':''}>${x}</option>`).join('');
     return `<tr${exp?' style="background:#fff6ec"':(sys?' style="background:#eef4fb"':'')}>
       <td><input type="number" value="${i+1}" min="1" style="width:60px;text-align:right;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="moveBc('${esc(bc)}',Number(this.value)-1)"></td>
       <td><input value="${esc(bc)}" style="min-width:180px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="renameBc(${i},this.value)"></td>
+      <td><select class="form-select" style="min-height:auto;padding:.2rem;min-width:88px" onchange="setBcGroup5('${esc(bc)}',this.value)">${g5Opts}</select></td>
       ${PERIODS.map(p=>`<td class="num ${p===PERIOD?'mcol cur':''}">${yenS(agg(p).totals.byBc[bc]||0)}</td>`).join('')}
       <td style="text-align:center"><input type="checkbox" ${personal?'checked':''} onchange="toggleBcPersonal('${esc(bc)}',this.checked)" title="チェックで個人の実績として集計（通常）。OFFにするとシスサポチームへ集約または全社のみ集計になります。"></td>
       <td style="text-align:center"><input type="checkbox" ${sys?'checked':''} onchange="toggleSysBc('${esc(bc)}',this.checked)" title="チェックでシスサポチームへ集約（システムレンタル料など）"></td>
@@ -1633,7 +1849,11 @@ VIEWS['m-bc'] = ()=>{
   $view().innerHTML=`<div class="page-wrap"><p class="subtitle">集計画面の軸となる業務分類（表示順）。<b>変更した瞬間に全画面の集計へ反映</b>します。分類名の変更・順序入れ替え・追加・削除すべて可能。</p>
   <div class="note">各分類について <b>個人帰属 / シスサポ集約 / 全社のみ</b> の3通りを選べます（個人帰属＝通常。シスサポ集約＝システムレンタル料など。全社のみ＝紹介料など）。細かい粒度（取引先・請求コード単位）が必要な場合は<a class="clickable" onclick="openTab('m-billing')">請求分類マスタ</a>でコード単位でも設定できます。</div>
   <div class="toolbar"><input class="form-input" id="newBc" style="max-width:220px" placeholder="追加する業務分類名"><button class="btn btn-primary btn-sm" onclick="addBc()">分類を追加</button><span style="flex:1"></span><span class="subtitle">順序欄の数値を変更すると並び替わります</span></div>
-  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>表示順</th><th>業務分類名</th>${PERIODS.map(p=>`<th class="num">${pMonth(p)}月</th>`).join('')}<th style="text-align:center">個人帰属（表示）</th><th style="text-align:center">シスサポ集約</th><th style="text-align:center">全社のみ（個人除外）</th><th>表示しない組織（複数選択可）</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+  <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>表示順</th><th>業務分類名</th><th>5分類</th>${PERIODS.map(p=>`<th class="num">${pMonth(p)}月</th>`).join('')}<th style="text-align:center">個人帰属（表示）</th><th style="text-align:center">シスサポ集約</th><th style="text-align:center">全社のみ（個人除外）</th><th>表示しない組織（複数選択可）</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+};
+window.setBcGroup5=(bc,g)=>{
+  if(!M.bcGroup5) M.bcGroup5={};
+  M.bcGroup5[bc]=g; invalidate(); render();
 };
 window.toggleBcPersonal=(bc,on)=>{
   // 個人帰属＝ON：sysBc と excludePersonalBc から外す
@@ -2115,15 +2335,18 @@ VIEWS.confirmations = ()=>{
   if(ROLE!=='ADMIN'){ $view().innerHTML=`<div class="page-wrap"><div class="note note-warn">確認状況は<b>管理者専用</b>の画面です。</div></div>`; return; }
   const emps=A().employees.slice(0,25);
   const done=emps.filter(e=>state.submitted[e.name+'|'+PERIOD]).length;
+  const overdue = isOverdue(PERIOD);
+  const lateCount = emps.filter(e=>!state.submitted[e.name+'|'+PERIOD]).length;
   const ra=reassignments(PERIOD);
   $view().innerHTML=`<div class="page-wrap"><p class="subtitle">担当者が「月次確認（担当者）」で自分の担当関与先を確認・提出した状況の一覧（${pLabel(PERIOD)}）。未提出者が残っていると月次締めができません。</p>
-  <div class="kpi-card-grid">${kpi('提出済み',done+'名','月次確認 完了')}${kpi('未提出',(emps.length-done)+'名','確認待ち')}${kpi('対象',emps.length+'名','担当者')}${kpi('担当変更（移管）',ra?ra.nMoved+'件':'−',ra?'前月比・本人へ通知':'前月データなし')}</div>
+  <div class="toolbar"><span class="status-badge ${overdue?'status-error':'status-warning'}">提出期限 ${closeDeadlineLabel(PERIOD)}${overdue?' 【期限超過】':''}</span><span style="flex:1"></span><span class="subtitle">毎月3日目安</span></div>
+  <div class="kpi-card-grid">${kpi('提出済み',done+'名','月次確認 完了')}${kpi('未提出',(emps.length-done)+'名',overdue?`<span style="color:var(--danger-color);font-weight:700">期限超過 ${lateCount}名</span>`:'確認待ち')}${kpi('対象',emps.length+'名','担当者')}${kpi('担当変更（移管）',ra?ra.nMoved+'件':'−',ra?'前月比・本人へ通知':'前月データなし')}</div>
   <div class="card"><div class="card-header"><h3 class="card-title">担当者別 確認状況</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>担当者</th><th>オフィス</th><th class="num">確認済 / 担当関与先</th><th>進捗</th><th>担当変更</th><th>提出</th><th></th></tr></thead><tbody>
     ${emps.map(e=>{const s=empConfirmStats(e.name);const pct=s.total?Math.round(s.done/s.total*100):0;const sub=!!state.submitted[e.name+'|'+PERIOD];
       const rm=ra&&ra.moved[e.name]?ra.moved[e.name].length:0, ad=ra&&ra.added[e.name]?ra.added[e.name].length:0;
       return `<tr><td>${esc(e.name)}</td><td>${e.office}</td><td class="num">${s.done} / ${s.total}</td>
       <td><span class="prog" style="display:inline-block;width:120px;vertical-align:middle"><i style="width:${pct}%;background:${pct===100?'var(--success-color)':'var(--warning-color)'}"></i></span> ${pct}%</td>
-      <td>${rm?`<span class="status-badge status-warning">移管 ${rm}</span> `:''}${ad?`<span class="status-badge status-valid">新規 ${ad}</span>`:''}${!rm&&!ad?'<span class="subtitle">−</span>':''}</td>
+      <td>${rm?`<span class="status-badge status-warning">移管 ${rm}</span> `:''}${(()=>{const a=ra&&ra.added[e.name]||[]; const n=a.filter(c=>c.isNew).length, h=a.filter(c=>!c.isNew).length; return (n?`<span class="status-badge status-valid">新規 ${n}</span> `:'')+(h?`<span class="status-badge status-info">引継ぎ ${h}</span> `:'');})()}${!rm&&!ad?'<span class="subtitle">−</span>':''}</td>
       <td>${sub?'<span class="status-badge status-valid">提出済</span>':'<span class="status-badge status-warning">未提出</span>'}</td>
       <td><button class="btn btn-outline btn-sm" onclick="openTab('staff-close',{closeEmp:'${esc(e.name)}'})">確認画面を開く</button></td></tr>`}).join('')}
     </tbody></table></div></div>
