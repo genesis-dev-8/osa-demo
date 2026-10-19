@@ -657,6 +657,29 @@ function openTab(route, init){
 }
 window.openTab=openTab;
 window.setPeriod=(p)=>{ PERIOD=p; render(); };
+/* 任意の月を取込月の候補として追加できる。state.extraPeriods に保持。 */
+function extraPeriods(){ return state.extraPeriods || (state.extraPeriods=[]); }
+/* 取込月プルダウン共通：取込済み月＋extra（任意追加月、初期は翌月3ヶ月分も自動） */
+function allPeriodOptions(selected){
+  const auto=[]; const last=PERIODS[PERIODS.length-1];
+  if(last){
+    let y=Number(last.slice(0,4)), m=Number(last.slice(5,7));
+    for(let i=0;i<3;i++){ m++; if(m>12){ m=1; y++; } auto.push(`${y}-${String(m).padStart(2,'0')}`); }
+  }
+  const custom=extraPeriods();
+  const all=[...new Set([...PERIODS,...auto,...custom])].sort();
+  if(selected && !all.includes(selected)) all.push(selected);
+  return all.sort().map(p=>`<option value="${p}" ${p===selected?'selected':''}>${pLabel(p)}${PERIODS.includes(p)?'':'（未取込）'}</option>`).join('');
+}
+window.addExtraPeriod=()=>{
+  const y=document.getElementById('xp-year')?.value;
+  const m=document.getElementById('xp-month')?.value;
+  if(!y||!m){ alert('年と月を指定してください'); return; }
+  const p=y+'-'+String(m).padStart(2,'0');
+  const list=extraPeriods();
+  if(!PERIODS.includes(p) && !list.includes(p)) list.push(p);
+  setPeriod(p);
+};
 /* 検索/フィルター入力の共通ハンドラ：日本語IME変換中は検索を走らせず、
    確定後 or 直接入力でdebounceしてrender。入力フォーカス位置も復元する。 */
 window.setFilter = (()=>{
@@ -694,11 +717,7 @@ function render(){
   const closedBadge = isClosed() ? ' <span class="status-badge status-warning">月次締め済み</span>' : '';
   const psel = `<label style="font-size:.78rem;color:rgba(255,255,255,.8)">対象月</label>
     <select onchange="setPeriod(this.value)" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;border-radius:4px;padding:.2rem .4rem;font:inherit;font-size:.8rem">
-      ${(()=>{
-        const list=[...PERIODS];
-        if(!list.includes(PERIOD)) list.push(PERIOD);
-        return list.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''} style="color:#222">${pLabel(p)}${PERIODS.includes(p)?'':'（未取込）'}</option>`).join('');
-      })()}
+      ${allPeriodOptions(PERIOD).replace(/<option /g,'<option style="color:#222" ')}
     </select>`;
   document.getElementById('app').innerHTML = `
   <div class="layout">
@@ -1764,15 +1783,17 @@ VIEWS.imports = ()=>{
     <p class="subtitle">${pLabel(PERIOD)}データ取込。<b>API連携は使わず、データ種別ごとにCSVをアップロード</b>します。取込時に空白スキップ・紐づけエラー・業務分類漏れ・金額突合をチェックします。</p>
     ${isNotLoaded?`<div class="note note-warn"><b>${pLabel(PERIOD)}はまだ取り込まれていません。</b>以下の「データ種別ごとのアップロード口」から CSV を選択して取り込んでください。取込後、ダッシュボードや個人成績の集計対象期間に加わります。</div>`:''}
     <div class="toolbar">
-      <label>取込月</label><select onchange="setPeriod(this.value)">${(()=>{
-        // 取込済み月＋未取込の将来月（最新取込月の翌月から3ヶ月先まで）を選択可能に
-        const extra=[]; const last=PERIODS[PERIODS.length-1];
-        let y=Number(last.slice(0,4)), m=Number(last.slice(5,7));
-        for(let i=0;i<3;i++){ m++; if(m>12){ m=1; y++; } extra.push(`${y}-${String(m).padStart(2,'0')}`); }
-        return [...PERIODS,...extra].map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${pLabel(p)}${PERIODS.includes(p)?'':'（未取込）'}</option>`).join('');
-      })()}</select>
+      <label>取込月</label><select onchange="setPeriod(this.value)">${allPeriodOptions(PERIOD)}</select>
       <button class="btn btn-primary btn-sm" onclick="runImport()">取込実行（上書き）</button>
-      <span class="subtitle">同月再取込は自動上書き（重複チェック）／連携頻度は請求確定後の月1回</span>
+      <span style="flex:1"></span>
+      <label>別の月を追加</label>
+      <input type="number" id="xp-year" value="${new Date().getFullYear()}" min="2020" max="2099" style="width:84px">
+      <span>年</span>
+      <select id="xp-month">${Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===new Date().getMonth()+1?'selected':''}>${m}月</option>`).join('')}</select>
+      <button class="btn btn-outline btn-sm" onclick="addExtraPeriod()">追加して選択</button>
+    </div>
+    <div class="toolbar" style="margin-top:-.4rem;background:transparent;border:none;padding-top:0">
+      <span class="subtitle">同月再取込は自動上書き（重複チェック）／連携頻度は請求確定後の月1回。追加した月は本画面で CSV アップロード後に集計へ組み込まれます。</span>
     </div>
     <div class="kpi-card-grid">
       ${kpi('取込成功',num(succeeded)+'件',sources.filter(s=>s.ok).length+' 種別')}
