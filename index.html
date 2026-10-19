@@ -287,7 +287,8 @@ const roleJa = r => r==='ADMIN'?'管理者':'担当者';
 /* =========================================================================
    編集可能マスタ（M）と再集計エンジン
    ========================================================================= */
-const MD = p => DATA.months[p];
+const EMPTY_MD = {lines:[],teamLines:[],consulLines:[],nippo:[],daily:{},import:{officeA_total:0,officeA_tax_excluded:0,officeB_total:0,officeB_tax_excluded:0,lines_officeA:0,lines_officeB:0,team_lines:0,unmatched:[],skipped:[]}};
+const MD = p => DATA.months[p] || EMPTY_MD;
 const ORG_DEF = [
   {name:'サンプル創研',parent:'',teamOnly:false,hidden:false},
   {name:'本社オフィス',parent:'サンプル創研',teamOnly:false,hidden:false},
@@ -656,6 +657,30 @@ function openTab(route, init){
 }
 window.openTab=openTab;
 window.setPeriod=(p)=>{ PERIOD=p; render(); };
+/* 検索/フィルター入力の共通ハンドラ：日本語IME変換中は検索を走らせず、
+   確定後 or 直接入力でdebounceしてrender。入力フォーカス位置も復元する。 */
+window.setFilter = (()=>{
+  let timer, _lastId, _lastCaret;
+  const applyFocus = ()=>{
+    if(!_lastId) return;
+    const el=document.getElementById(_lastId);
+    if(!el) return;
+    el.focus();
+    try{ if(_lastCaret!=null && el.setSelectionRange) el.setSelectionRange(_lastCaret,_lastCaret); }catch(e){}
+  };
+  return (path, value, el)=>{
+    if(el){ _lastId=el.id||null; _lastCaret=el.selectionStart; }
+    clearTimeout(timer);
+    timer=setTimeout(()=>{
+      const parts=path.split('.');
+      let obj=state;
+      for(let i=0;i<parts.length-1;i++){ if(!obj[parts[i]]) obj[parts[i]]={}; obj=obj[parts[i]]; }
+      obj[parts[parts.length-1]]=value;
+      render();
+      setTimeout(applyFocus,0);
+    }, 200);
+  };
+})();
 
 /* ---------- shell ---------- */
 function render(){
@@ -669,7 +694,11 @@ function render(){
   const closedBadge = isClosed() ? ' <span class="status-badge status-warning">月次締め済み</span>' : '';
   const psel = `<label style="font-size:.78rem;color:rgba(255,255,255,.8)">対象月</label>
     <select onchange="setPeriod(this.value)" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;border-radius:4px;padding:.2rem .4rem;font:inherit;font-size:.8rem">
-      ${PERIODS.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''} style="color:#222">${pLabel(p)}</option>`).join('')}
+      ${(()=>{
+        const list=[...PERIODS];
+        if(!list.includes(PERIOD)) list.push(PERIOD);
+        return list.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''} style="color:#222">${pLabel(p)}${PERIODS.includes(p)?'':'（未取込）'}</option>`).join('');
+      })()}
     </select>`;
   document.getElementById('app').innerHTML = `
   <div class="layout">
@@ -1389,11 +1418,11 @@ VIEWS['client-productivity'] = ()=>{
   <div class="page-wrap">
     <div class="note">この画面は<b>評価に直結しません。</b>関与先ごとの気づき（単価の偏り・時間の付け方の乖離）を発見するための分析ツールです。異常値の目印は「調整が入ったのではないか」ではなく「要確認」の候補です。元データ：請求実績＋TKC日報（直接時間のみ合算、担当者問わず）。</div>
     <div class="toolbar">
-      <label>関与先検索</label><input value="${esc(f.q)}" placeholder="関与先名" oninput="state.cpF.q=this.value;render()">
+      <label>関与先検索</label><input id="cp-q" value="${esc(f.q)}" placeholder="関与先名" oncompositionstart="this._ime=1" oncompositionend="this._ime=0;setFilter('cpF.q',this.value,this)" oninput="if(!this._ime)setFilter('cpF.q',this.value,this)">
       <label>主な5分類</label><select onchange="state.cpF.g5=this.value;render()"><option value="">全て</option>${BC_GROUP_ORDER.map(g=>`<option value="${g}" ${f.g5===g?'selected':''}>${g}</option>`).join('')}</select>
       <label>主担当者</label><select onchange="state.cpF.emp=this.value;render()"><option value="">全て</option>${allEmps.map(e=>`<option value="${esc(e)}" ${f.emp===e?'selected':''}>${esc(e)}</option>`).join('')}</select>
-      <label>報酬下限(万円)</label><input type="number" value="${esc(f.minFee)}" style="width:90px" oninput="state.cpF.minFee=this.value;render()">
-      <label>単価上限(円/h)</label><input type="number" value="${esc(f.maxRate)}" style="width:100px" oninput="state.cpF.maxRate=this.value;render()">
+      <label>報酬下限(万円)</label><input id="cp-minfee" type="number" value="${esc(f.minFee)}" style="width:90px" oninput="setFilter('cpF.minFee',this.value,this)">
+      <label>単価上限(円/h)</label><input id="cp-maxrate" type="number" value="${esc(f.maxRate)}" style="width:100px" oninput="setFilter('cpF.maxRate',this.value,this)">
       <span style="flex:1"></span><span class="record-count">${num(shown.length)}件 / 合計 ${yen(totalFee)} / ${num(Math.round(totalHrs))}h</span>
     </div>
     <div class="kpi-card-grid">
@@ -1485,7 +1514,7 @@ VIEWS.nippo = ()=>{
     <div class="toolbar">
       <label>担当者</label><select onchange="state.nf.reg=this.value;render()"><option value="">全担当者</option>${regs.map(r=>`<option value="${esc(r)}" ${f.reg===r?'selected':''}>${esc(nippoName(r))}${DATA.id2name&&DATA.id2name[r]?'':'（未連携）'}</option>`).join('')}</select>
       <label>種別</label><select onchange="state.nf.kind=this.value;render()"><option value="">すべて</option><option value="d" ${f.kind==='d'?'selected':''}>直接業務のみ</option><option value="i" ${f.kind==='i'?'selected':''}>間接業務のみ</option></select>
-      <label>検索</label><input value="${esc(f.q)}" placeholder="関与先/担当者" oninput="state.nf.q=this.value;render()">
+      <label>検索</label><input id="nf-q" value="${esc(f.q)}" placeholder="関与先/担当者" oncompositionstart="this._ime=1" oncompositionend="this._ime=0;setFilter('nf.q',this.value,this)" oninput="if(!this._ime)setFilter('nf.q',this.value,this)">
       <span style="flex:1"></span><span class="record-count">${num(fs.n)}件 ／ 直接${num(Math.round(fs.direct))}h・間接${num(Math.round(fs.indirect))}h</span>
 </div>
     <div class="card"><div class="card-header"><h3 class="card-title">TKC日報データ（${pLabel(PERIOD)}・実データ）</h3></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>日付</th><th>担当者</th><th>種別</th><th>関与先</th><th>コード</th><th>業務分類</th><th class="num">作業時間</th></tr></thead><tbody>
@@ -1722,11 +1751,19 @@ VIEWS.imports = ()=>{
       </label>
       ${s.amt!=null?`<div class="hrow" style="padding:.25rem 0;font-size:.78rem"><span class="k">請求額合計</span><span class="v">${yen(s.amt)}</span></div>`:''}
     </div>`).join('');
+  const isNotLoaded = !PERIODS.includes(PERIOD);
   $view().innerHTML=`
   <div class="page-wrap">
     <p class="subtitle">${pLabel(PERIOD)}データ取込。<b>API連携は使わず、データ種別ごとにCSVをアップロード</b>します。取込時に空白スキップ・紐づけエラー・業務分類漏れ・金額突合をチェックします。</p>
+    ${isNotLoaded?`<div class="note note-warn"><b>${pLabel(PERIOD)}はまだ取り込まれていません。</b>以下の「データ種別ごとのアップロード口」から CSV を選択して取り込んでください。取込後、ダッシュボードや個人成績の集計対象期間に加わります。</div>`:''}
     <div class="toolbar">
-      <label>取込月</label><select onchange="setPeriod(this.value)">${PERIODS.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${p}</option>`).join('')}</select>
+      <label>取込月</label><select onchange="setPeriod(this.value)">${(()=>{
+        // 取込済み月＋未取込の将来月（最新取込月の翌月から3ヶ月先まで）を選択可能に
+        const extra=[]; const last=PERIODS[PERIODS.length-1];
+        let y=Number(last.slice(0,4)), m=Number(last.slice(5,7));
+        for(let i=0;i<3;i++){ m++; if(m>12){ m=1; y++; } extra.push(`${y}-${String(m).padStart(2,'0')}`); }
+        return [...PERIODS,...extra].map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${pLabel(p)}${PERIODS.includes(p)?'':'（未取込）'}</option>`).join('');
+      })()}</select>
       <button class="btn btn-primary btn-sm" onclick="runImport()">取込実行（上書き）</button>
       <span class="subtitle">同月再取込は自動上書き（重複チェック）／連携頻度は請求確定後の月1回</span>
     </div>
@@ -1931,7 +1968,7 @@ VIEWS['m-billing'] = ()=>{
   if(!state.mbQ) state.mbQ='';
   const q=state.mbQ;
   const shown=list.filter(l=>!q||l.detail.includes(q)||l.code.includes(q)||effBc({office:l.office,code:l.code,bc:''}).includes(q));
-  const opts=(cur)=>[...bcOf(),'未分類'].map(b=>`<option ${b===cur?'selected':''}>${esc(b)}</option>`).join('');
+  const opts=(cur)=>['未分類',...bcOf().filter(b=>b!=='未分類')].map(b=>`<option ${b===cur?'selected':''}>${esc(b)}</option>`).join('');
   const officeOpts=(cur)=>['A事務所','B事務所'].map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('');
   const rows=shown.slice(0,200).map(l=>{
     const key=l.office+'|'+l.code; const cur=effBc({office:l.office,code:l.code,bc:(M.codeMap[key]||'未分類')});
@@ -1944,7 +1981,7 @@ VIEWS['m-billing'] = ()=>{
       <td><input value="${esc(l.code)}" style="width:80px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" ${l.fromData?'disabled title="請求データ由来は細目CDの変更不可"':''} onchange="updateBillingMeta(${metaIdx},'code',this.value)"></td>
       <td><input value="${esc(l.detail)}" style="min-width:200px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="updateBillingDetail('${esc(l.office)}','${esc(l.code)}',this.value,${metaIdx})"></td>
       <td><input value="${esc(l.salesDiv||'')}" style="width:80px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="updateBillingMeta(${metaIdx},'salesDiv',this.value)"></td>
-      <td><select class="form-select" style="min-height:auto;padding:.25rem" onchange="setCodeBc('${esc(key)}',this.value)">${opts(cur)}</select>${over?' <span class="status-badge status-info">変更</span>':''}</td>
+      <td style="white-space:nowrap"><select class="form-select" style="min-height:auto;padding:.25rem" onchange="setCodeBc('${esc(key)}',this.value)">${opts(cur)}</select>${over?` <button class="btn btn-outline btn-sm" style="padding:.15rem .5rem;font-size:.72rem" onclick="clearCodeBc('${esc(key)}')" title="未分類に戻す">クリア</button>`:''}</td>
       <td style="text-align:center">${isSysBc(cur)?'<span class="status-badge status-info" title="業務分類がシスサポ対象">分類＝シスサポ</span>':(exBc?'<span class="status-badge status-warning" title="分類単位で個人除外">分類＝全社のみ</span>':'<span class="subtitle">—</span>')}</td>
       <td style="text-align:center"><select class="form-select" style="min-height:auto;padding:.2rem;width:110px" ${exBc?'disabled title="分類単位で既に個人除外されています"':''} onchange="setBillingAttr('${esc(key)}',this.value)">
         <option value="personal" ${!exCode?'selected':''}>個人帰属</option>
@@ -1963,7 +2000,7 @@ VIEWS['m-billing'] = ()=>{
     <div class="note" style="margin-top:.8rem">現在の対象：${M.sysBc.map(esc).join('・')||'なし'}　→　<a class="clickable" onclick="openTab('team')">チーム集計で影響額を見る</a></div>
 </div></div>
   ${un.length?`<div class="note note-warn"><b>${pLabel(PERIOD)}の未分類が ${un.length}明細（${yen(un.reduce((s,l)=>s+l.amount,0))}）</b>あります（該当コード：${[...new Set(un.map(l=>l.code))].join('・')}）。</div>`:'<div class="note">この月に未分類の請求レコードはありません。</div>'}
-  <div class="toolbar"><label>検索</label><input value="${esc(q)}" placeholder="細目名／コード／業務分類" oninput="state.mbQ=this.value;render()"><span style="flex:1"></span><span class="record-count">${shown.length}件</span></div>
+  <div class="toolbar"><label>検索</label><input id="mb-q" value="${esc(q)}" placeholder="細目名／コード／業務分類" oncompositionstart="this._ime=1" oncompositionend="this._ime=0;setFilter('mbQ',this.value,this)" oninput="if(!this._ime)setFilter('mbQ',this.value,this)"><span style="flex:1"></span><span class="record-count">${shown.length}件</span></div>
   <div class="toolbar">
     <label>追加</label>
     <select class="form-select" id="newBillOffice" style="width:84px"><option>A事務所</option><option>B事務所</option></select>
@@ -1977,6 +2014,7 @@ VIEWS['m-billing'] = ()=>{
   <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>細目コード</th><th>報酬細目</th><th>取引区分</th><th>業務分類（変更可）</th><th style="text-align:center">分類の属性</th><th style="text-align:center">帰属（コード単位）</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${shown.length>200?`<div class="card-body subtitle">上位200件を表示</div>`:''}</div></div>`;
 };
 window.setCodeBc=(key,bc)=>{ M.codeMap[key]=bc; invalidate(); render(); };
+window.clearCodeBc=(key)=>{ delete M.codeMap[key]; invalidate(); render(); };
 window.toggleSysBc=(bc,on)=>{ M.sysBc = on ? [...new Set([...M.sysBc,bc])] : M.sysBc.filter(x=>x!==bc); invalidate(); render(); };
 window.toggleExCode=(key,on)=>{ if(on) M.excludePersonalCode[key]=true; else delete M.excludePersonalCode[key]; invalidate(); render(); };
 window.setExCode=(key,on)=>{ if(on) M.excludePersonalCode[key]=true; else delete M.excludePersonalCode[key]; invalidate(); render(); };
@@ -2255,7 +2293,7 @@ VIEWS['m-client'] = ()=>{
       <td><input value="${esc(c.from)}" style="width:84px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.clientMap[${i}].from=this.value;invalidate();render()"></td>
       <td><input value="${esc(c.name)}" style="min-width:200px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.clientMap[${i}].name=this.value;render()"></td>
       <td class="num">${n.length}</td><td class="num">${yen(n.reduce((s,l)=>s+l.amount,0))}</td>
-      <td><input value="${esc(c.to)}" placeholder="紐づけ先コード（3桁）" style="width:150px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.clientMap[${i}].to=this.value;invalidate();render()"></td>
+      <td style="white-space:nowrap"><input value="${esc(c.to)}" placeholder="紐づけ先コード（3桁）" style="width:130px;border:1px solid #ced4da;border-radius:4px;padding:.2rem" onchange="M.clientMap[${i}].to=this.value;invalidate();render()">${c.to?` <button class="btn btn-outline btn-sm" style="padding:.15rem .5rem;font-size:.72rem" onclick="clearClientLink(${i})" title="未紐づけに戻す">クリア</button>`:''}</td>
       <td>${c.to?'<span class="status-badge status-valid">紐づけ済</span>':'<span class="status-badge status-warning">未紐づけ</span>'}</td>
       <td><button class="btn btn-outline btn-sm" onclick="removeClientMap(${i})">削除</button></td></tr>`;
   }).join('');
@@ -2271,6 +2309,7 @@ VIEWS['m-client'] = ()=>{
 </div>
   <div class="card"><div class="table-wrapper"><table class="data-table"><thead><tr><th>請求元</th><th>元の関与先CD</th><th>関与先名</th><th class="num">明細(${pMonth(PERIOD)}月)</th><th class="num">金額</th><th>紐づけ先CD</th><th>状態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
 };
+window.clearClientLink=(i)=>{ if(!M.clientMap[i]) return; M.clientMap[i].to=''; invalidate(); render(); };
 window.addClientMap=()=>{
   const o=document.getElementById('newCliOffice').value;
   const f=(document.getElementById('newCliFrom').value||'').trim();
@@ -2454,7 +2493,7 @@ VIEWS['billing-data'] = ()=>{
     <label>対象月</label><select onchange="setPeriod(this.value)">${PERIODS.map(p=>`<option value="${p}" ${p===PERIOD?'selected':''}>${pLabel(p)}</option>`).join('')}</select>
     <label>オフィス</label><select onchange="state.bf.office=this.value;render()"><option value="">全て</option><option ${f.office==='A事務所'?'selected':''}>A事務所</option><option ${f.office==='B事務所'?'selected':''}>B事務所</option></select>
     <label>業務分類</label><select onchange="state.bf.bc=this.value;render()">${bcOpts}</select>
-    <label>検索</label><input value="${esc(f.q)}" placeholder="関与先/担当者" oninput="state.bf.q=this.value;render()">
+    <label>検索</label><input id="bf-q" value="${esc(f.q)}" placeholder="関与先/担当者" oncompositionstart="this._ime=1" oncompositionend="this._ime=0;setFilter('bf.q',this.value,this)" oninput="if(!this._ime)setFilter('bf.q',this.value,this)">
     ${canEdit?`<label style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem"><input type="checkbox" ${f.onlyEdited?'checked':''} onchange="state.bf.onlyEdited=this.checked;render()">編集済のみ</label>`:''}
     <span style="flex:1"></span><span class="record-count">${num(rows.length)}件 / 合計 ${yen(total)}</span>
 </div>
