@@ -1752,7 +1752,17 @@ VIEWS.imports = ()=>{
     {key:'officeB',  label:'FMS請求実績（B事務所）',  accept:'.csv', raw:imp.officeB_total,  tax:imp.officeB_tax_excluded,  ok:imp.lines_officeB,  amt:T.officeB,   hint:'FMS（KCT含む）から月次エクスポートしたCSV'},
     {key:'shisan',     label:'資産税請求（kintone）',accept:'.csv', raw:MD(PERIOD).teamLines.length,    tax:0, ok:MD(PERIOD).teamLines.length,    amt:T.teamShisan,  hint:'資産税アプリの請求データCSV'},
     {key:'consul',     label:'コンサル請求（kintone）',accept:'.csv',raw:MD(PERIOD).consulLines.length,  tax:0, ok:MD(PERIOD).consulLines.length,  amt:T.consul,      hint:'税理士法人請求管理＋コンサル請求管理の2アプリ'},
-    {key:'nippo',      label:'業務日報（TKC CSV）',  accept:'.csv', raw:(MD(PERIOD).nippo||[]).length,  tax:0, ok:(MD(PERIOD).nippo||[]).length,  amt:null,          hint:'TKC日報を月次エクスポートしたCSV'},
+    {key:'nippo',      label:'業務日報（TKC CSV）',  accept:'.csv', raw:(MD(PERIOD).nippo||[]).length,  tax:0, ok:(MD(PERIOD).nippo||[]).length,  amt:null,          hint:'TKC日報を月次エクスポートしたCSV。担当者は「氏名」で担当者マスタと突合（空白・全角/半角は正規化して比較）'},
+  ];
+  /* TKCマスタ①②は月次ではなく「最新状態を随時差し替え」。金額突合には含めない */
+  const tkcAll=(DATA.tkcClients||[]);
+  const masterSources = [
+    {key:'tkc1', label:'TKCマスタ①（OSA連携用）', accept:'.csv', ok:tkcAll.filter(c=>c.emp).length, total:tkcAll.length,
+     hint:'TKC「所内情報管理」から出力。項目：事務所コード／関与先コード／商号／担当者コード／監査担当者名／巡回監査の実施／監査回数。関与先→担当者の紐づけ（受託件数・監査サイクル・担当変更の検出）に使用',
+     cols:'事務所コード, 関与先コード, 商号, 商号フリガナ, 担当者コード, 監査担当者名, 巡回監査の実施, 監査回数＿月, 監査回数＿回数'},
+    {key:'tkc2', label:'TKCマスタ②（所内管理情報：システム活用状況）', accept:'.csv', ok:tkcAll.length, total:tkcAll.length,
+     hint:'TKC「所内情報管理」から出力（例：関与先別システム活用状況_YYYYMM.csv）。財務会計／給与計算／販売管理／電子納税／継続MAS／書面添付の導入状況と決算月。TKC活用状況・提案チャンスに使用',
+     cols:'行, 事務所コード, 関与先コード, 関与先, 担当者, 決算, 書面添付, 中小要領・指針, 財務会計, 財務, 給与計算, 販売管理, 電子納税, 継続MAS, 予算登録, 中期計画, 業績・決算検討会, 巡回'},
   ];
   const skippedTotal = imp.skipped.length;
   const unmatchedTotal = imp.unmatched.length;
@@ -1777,10 +1787,23 @@ VIEWS.imports = ()=>{
       </label>
       ${s.amt!=null?`<div class="hrow" style="padding:.25rem 0;font-size:.78rem"><span class="k">請求額合計</span><span class="v">${yen(s.amt)}</span></div>`:''}
     </div>`).join('');
+  const masterZones = masterSources.map(s=>`
+    <div class="drop-zone" style="border:2px dashed #cfd8e5;border-radius:8px;padding:1rem;background:#fbfcfe;display:flex;flex-direction:column;gap:.4rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem">
+        <span style="font-weight:700">${esc(s.label)}</span>
+        <span class="status-badge ${s.ok?'status-valid':'status-neutral'}">${s.ok?'取込済 '+num(s.ok)+'件（最新）':'未取込'}</span>
+      </div>
+      <div class="subtitle" style="font-size:.72rem">${esc(s.hint)}</div>
+      <div class="subtitle" style="font-size:.68rem;color:#6c757d">想定ヘッダー：${esc(s.cols)}</div>
+      <label class="btn btn-outline btn-sm" style="cursor:pointer;text-align:center">
+        CSVファイルを選択（${s.accept}）
+        <input type="file" accept="${s.accept}" style="display:none" onchange="pseudoImport('${s.key}',this)">
+      </label>
+    </div>`).join('');
   const isNotLoaded = !PERIODS.includes(PERIOD);
   $view().innerHTML=`
   <div class="page-wrap">
-    <p class="subtitle">${pLabel(PERIOD)}データ取込。<b>API連携は使わず、データ種別ごとにCSVをアップロード</b>します。取込時に空白スキップ・紐づけエラー・業務分類漏れ・金額突合をチェックします。</p>
+    <p class="subtitle">${pLabel(PERIOD)}データ取込。<b>API連携は使わず、データ種別ごとにCSVをアップロード</b>します。取込時に空白スキップ・紐づけエラー・業務分類漏れ・金額突合をチェックします。TKCマスタ①②は月次ではなく<b>最新状態を随時差し替え</b>です。</p>
     ${isNotLoaded?`<div class="note note-warn"><b>${pLabel(PERIOD)}はまだ取り込まれていません。</b>以下の「データ種別ごとのアップロード口」から CSV を選択して取り込んでください。取込後、ダッシュボードや個人成績の集計対象期間に加わります。</div>`:''}
     <div class="toolbar">
       <label>取込月</label><select onchange="setPeriod(this.value)">${allPeriodOptions(PERIOD)}</select>
@@ -1804,6 +1827,10 @@ VIEWS.imports = ()=>{
     <div class="card"><div class="card-header"><h3 class="card-title">データ種別ごとのアップロード口</h3></div><div class="card-body">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.75rem">${zones}</div>
       <div class="note" style="margin-top:.9rem">CSV は <code>.csv</code> / <code>.csv.gz</code> / <code>.zip</code> に対応予定（本番環境）。デモ版ではファイル選択時に取込成功のメッセージを表示します（実データはサーバー側で処理）。</div>
+    </div></div>
+    <div class="card"><div class="card-header"><h3 class="card-title">マスタデータのアップロード口（TKC 所内情報管理）</h3><span class="record-count">最新状態のみ保持</span></div><div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:.75rem">${masterZones}</div>
+      <div class="note" style="margin-top:.9rem">TKCの所内情報管理からCSV出力した2本を取り込みます。<b>取込月に関係なく最新1本のみ保持</b>し、差し替えると受託件数・TKC活用状況・担当変更の検出に即時反映します。文字コードは Shift_JIS（CP932）／UTF-8 どちらも可。担当者名の全角スペース・半角スペースは取込時に正規化し、担当者コードで担当者マスタ（CDB担当者CD）と突合します。</div>
     </div></div>
     <div class="bar2">
       <div class="card"><div class="card-header"><h3 class="card-title">金額突合（元データ合計 vs 集計結果）</h3></div>
@@ -1834,7 +1861,7 @@ VIEWS.imports = ()=>{
     <div class="card"><div class="card-header"><h3 class="card-title">スキップ一覧（関与先名 or 担当者が空白）</h3><span class="record-count">${imp.skipped.length}件</span></div>
       <div class="card-body">${imp.skipped.length? '<div class="table-wrapper"><table class="data-table"><thead><tr><th>ソース</th><th>伝票</th><th>関与先</th><th>担当者</th><th>理由</th></tr></thead><tbody>'+imp.skipped.map(s=>`<tr><td>${esc(s.src)}</td><td>${esc(s.voucher)}</td><td>${esc(s.client)}</td><td>${esc(s.emp)}</td><td>${esc(s.reason)}</td></tr>`).join('')+'</tbody></table></div>' : '<p class="subtitle">この月はスキップ対象行はありませんでした（全行に関与先名・担当者あり）。</p>'}</div>
 </div>
-    <div class="note">連携方式（確定）：FMS請求実績はAPIがないためCSV手動エクスポート＋取込。kintoneはAPI連携（コンサル請求2アプリ／資産税請求）。日報はTKC日報からCSVで月次取込。<b>和暦（令和8年＝2026年）は取込時に西暦へ正規化</b>しています。</div>
+    <div class="note">連携方式（確定）：FMS請求実績はAPIがないためCSV手動エクスポート＋取込。kintoneはAPI連携（コンサル請求2アプリ／資産税請求）。日報はTKC日報からCSVで月次取込。TKCマスタ①②は所内情報管理からCSV出力して本画面で差し替え。<b>和暦（令和8年＝2026年）は取込時に西暦へ正規化</b>しています。</div>
     <div class="note"><b>データ圧縮取込</b>：取込ファイル（CSV・JSON）は gzip / zip 圧縮に対応予定です。元データが数千〜数万件規模になるため、転送量とストレージを節約する前提で設計します。拡張子 <code>.csv.gz</code> / <code>.zip</code> をそのままアップロードできる形を想定（本番環境で有効化）。</div>
 </div>`;
 };
